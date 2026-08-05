@@ -2,7 +2,13 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
+import app.models
 from app.modules.auth.models import *
+from app.modules.configuracion.model import *
+from app.modules.categorias.model import *
+from app.modules.activos.model import *
+from app.modules.personas.model import *
+from app.modules.activos.movimiento_model import *
 
 from alembic import context
 

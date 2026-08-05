@@ -1,0 +1,37 @@
+{% extends "layouts/auth.html" %}
+
+{% block content %}
+
+<div class="login-container">
+
+    <div class="login-card">
+
+        <h1>Stock de Inventario</h1>
+
+        <form method="post" action="/login">
+
+            <input
+                type="text"
+                name="usuario"
+                placeholder="Usuario"
+                required>
+
+            <input
+                type="password"
+                name="password"
+                placeholder="Contraseña"
+                required>
+
+            <button type="submit">
+
+                Iniciar sesión
+
+            </button>
+
+        </form>
+
+    </div>
+
+</div>
+
+{% endblock %}

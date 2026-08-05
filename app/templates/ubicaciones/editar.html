@@ -1,0 +1,201 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+
+    <h2>
+        Editar Ubicación
+    </h2>
+
+    <a href="/ubicaciones" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i>
+        Volver
+    </a>
+
+</div>
+
+<div class="card-custom">
+
+<form method="POST">
+
+<div class="row">
+
+<div class="col-md-6 mb-3">
+
+<label class="form-label">
+
+Nombre
+
+</label>
+
+<input
+type="text"
+name="nombre"
+class="form-control"
+value="{{ ubicacion.nombre }}"
+required>
+
+</div>
+
+<div class="col-md-6 mb-3">
+
+<label class="form-label">
+
+Código
+
+</label>
+
+<input
+type="text"
+name="codigo"
+class="form-control"
+value="{{ ubicacion.codigo }}"
+required>
+
+</div>
+
+<div class="col-md-6 mb-3">
+
+<label class="form-label">
+
+Curso
+
+</label>
+
+<input
+type="text"
+name="curso"
+class="form-control"
+value="{{ ubicacion.curso or '' }}">
+
+</div>
+
+<div class="col-md-6 mb-3">
+
+<label class="form-label">
+
+Sede
+
+</label>
+
+<select
+name="sede"
+class="form-select">
+
+<option
+value="Santa Teresa"
+{% if ubicacion.sede=="Santa Teresa" %}selected{% endif %}>
+Santa Teresa
+</option>
+
+<option
+value="San José"
+{% if ubicacion.sede=="San José" %}selected{% endif %}>
+San José
+</option>
+
+</select>
+
+</div>
+
+<div class="col-md-6 mb-3">
+
+<label class="form-label">
+
+Tipo
+
+</label>
+
+<input
+type="text"
+name="tipo"
+class="form-control"
+list="tipos"
+value="{{ ubicacion.tipo }}"
+required>
+
+<datalist id="tipos">
+
+<option value="Bodega">
+
+<option value="Aula">
+
+<option value="Laboratorio">
+
+<option value="Biblioteca">
+
+<option value="Oficina">
+
+</datalist>
+
+</div>
+
+<div class="col-md-6 mb-3">
+
+<label class="form-label">
+
+Piso
+
+</label>
+
+<input
+type="text"
+name="piso"
+class="form-control"
+value="{{ ubicacion.piso or '' }}">
+
+</div>
+
+<div class="col-md-12 mb-3">
+
+<label class="form-label">
+
+Descripción
+
+</label>
+
+<textarea
+name="descripcion"
+class="form-control"
+rows="3">{{ ubicacion.descripcion or '' }}</textarea>
+
+</div>
+
+<div class="col-md-12 mb-3">
+
+<div class="form-check">
+
+<input
+class="form-check-input"
+type="checkbox"
+name="activo"
+value="true"
+{% if ubicacion.activo %}checked{% endif %}>
+
+<label class="form-check-label">
+
+Ubicación Activa
+
+</label>
+
+</div>
+
+</div>
+
+</div>
+
+<button
+class="btn btn-primary">
+
+<i class="bi bi-check-circle"></i>
+
+Actualizar Ubicación
+
+</button>
+
+</form>
+
+</div>
+
+{% endblock %}

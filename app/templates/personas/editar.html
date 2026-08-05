@@ -1,0 +1,303 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+<link rel="stylesheet" href="/static/css/personas.css">
+
+<div class="page-header">
+
+    <div>
+
+        <h1>Editar Persona</h1>
+
+        <p>Actualizar la información del funcionario.</p>
+
+    </div>
+
+</div>
+
+<div class="card-panel">
+
+<form
+    method="POST"
+    action="/personas/{{ persona.id }}/editar"
+>
+
+<div class="form-grid">
+
+    <!-- Nombre -->
+
+    <div class="form-group">
+
+        <label>
+
+            Nombre Completo *
+
+        </label>
+
+        <input
+            type="text"
+            name="nombre"
+            value="{{ persona.nombre }}"
+            required
+        >
+
+    </div>
+
+    <!-- Cargo -->
+
+    <div class="form-group">
+
+        <label>
+
+            Cargo *
+
+        </label>
+
+        <select
+            name="cargo"
+            required
+        >
+
+            {% set cargos = [
+                "Docente",
+                "Coordinador",
+                "Rector",
+                "Psicorientador",
+                "Secretaría",
+                "Bibliotecario",
+                "Auxiliar Administrativo",
+                "Sistemas",
+                "Servicios Generales",
+                "Vigilancia"
+            ] %}
+
+            {% for cargo in cargos %}
+
+            <option
+                value="{{ cargo }}"
+                {% if persona.cargo == cargo %}selected{% endif %}
+            >
+
+                {{ cargo }}
+
+            </option>
+
+            {% endfor %}
+
+        </select>
+
+    </div>
+
+    <!-- Área -->
+
+    <div class="form-group">
+
+        <label>
+
+            Área *
+
+        </label>
+
+        <select
+            name="area"
+            required
+        >
+
+            {% set areas = [
+                "Tecnología",
+                "Matemáticas",
+                "Español",
+                "Inglés",
+                "Ciencias Naturales",
+                "Ciencias Sociales",
+                "Educación Física",
+                "Artes",
+                "Música",
+                "Preescolar",
+                "Primaria",
+                "Coordinación",
+                "Rectoría",
+                "Secretaría",
+                "Biblioteca",
+                "Sistemas"
+            ] %}
+
+            {% for area in areas %}
+
+            <option
+                value="{{ area }}"
+                {% if persona.area == area %}selected{% endif %}
+            >
+
+                {{ area }}
+
+            </option>
+
+            {% endfor %}
+
+        </select>
+
+    </div>
+
+    <!-- Sede -->
+
+    <div class="form-group">
+
+        <label>
+
+            Sede *
+
+        </label>
+
+        <select
+            name="sede"
+            required
+        >
+
+            {% set sedes = [
+                "Principal",
+                "Santa Teresa",
+                "San José",
+                "Otra"
+            ] %}
+
+            {% for sede in sedes %}
+
+            <option
+                value="{{ sede }}"
+                {% if persona.sede == sede %}selected{% endif %}
+            >
+
+                {{ sede }}
+
+            </option>
+
+            {% endfor %}
+
+        </select>
+
+    </div>
+
+    <!-- Correo -->
+
+    <div class="form-group">
+
+        <label>
+
+            Correo Electrónico
+
+        </label>
+
+        <input
+            type="email"
+            name="correo"
+            value="{{ persona.correo or '' }}"
+        >
+
+    </div>
+
+    <!-- Teléfono -->
+
+    <div class="form-group">
+
+        <label>
+
+            Teléfono
+
+        </label>
+
+        <input
+            type="text"
+            name="telefono"
+            value="{{ persona.telefono or '' }}"
+        >
+
+    </div>
+
+    <!-- Estado -->
+
+    <div class="form-group">
+
+        <label>
+
+            Estado
+
+        </label>
+
+        <select
+            name="activo"
+        >
+
+            <option
+                value="true"
+                {% if persona.activo %}selected{% endif %}
+            >
+
+                Activo
+
+            </option>
+
+            <option
+                value="false"
+                {% if not persona.activo %}selected{% endif %}
+            >
+
+                Inactivo
+
+            </option>
+
+        </select>
+
+    </div>
+
+    <!-- Observaciones -->
+
+    <div class="form-group full">
+
+        <label>
+
+            Observaciones
+
+        </label>
+
+        <textarea
+            name="observaciones"
+            rows="5"
+        >{{ persona.observaciones or '' }}</textarea>
+
+    </div>
+
+</div>
+
+<div class="form-actions">
+
+    <a
+        href="/personas"
+        class="btn-secondary"
+    >
+
+        <i class="bi bi-arrow-left"></i>
+
+        Cancelar
+
+    </a>
+
+    <button
+        type="submit"
+        class="btn-primary"
+    >
+
+        <i class="bi bi-save"></i>
+
+        Guardar Cambios
+
+    </button>
+
+</div>
+
+</form>
+
+</div>
+
+{% endblock %}

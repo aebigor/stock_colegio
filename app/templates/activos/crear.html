@@ -1,0 +1,261 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+<link rel="stylesheet" href="/static/css/activos.css">
+
+<div class="page-header">
+
+    <div>
+
+        <h1>Nuevo Activo</h1>
+
+        <p>Registrar uno o varios activos.</p>
+
+    </div>
+
+</div>
+
+<div class="card-panel">
+
+<form
+    method="POST"
+    action="/activos/crear"
+>
+
+<div class="form-grid">
+
+    <!-- Nombre -->
+
+    <div class="form-group">
+
+        <label>
+
+            Nombre *
+
+        </label>
+
+        <input
+            type="text"
+            name="nombre"
+            required
+        >
+
+    </div>
+
+    <!-- Categoria -->
+
+    <div class="form-group">
+
+        <label>
+
+            Categoría *
+
+        </label>
+
+        <select
+            name="categoria_id"
+            required
+        >
+
+            <option value="">
+
+                Seleccione...
+
+            </option>
+
+            {% for categoria in categorias %}
+
+            <option
+                value="{{ categoria.id }}"
+            >
+
+                {{ categoria.nombre }}
+
+            </option>
+
+            {% endfor %}
+
+        </select>
+
+    </div>
+
+
+    <!-- Marca -->
+
+    <div class="form-group">
+
+        <label>
+
+            Marca
+
+        </label>
+
+        <input
+            type="text"
+            name="marca"
+        >
+
+    </div>
+
+
+    <!-- Modelo -->
+
+    <div class="form-group">
+
+        <label>
+
+            Modelo
+
+        </label>
+
+        <input
+            type="text"
+            name="modelo"
+        >
+
+    </div>
+
+
+    <!-- Cantidad -->
+
+    <div class="form-group">
+
+        <label>
+
+            Cantidad *
+
+        </label>
+
+        <input
+            type="number"
+            name="cantidad"
+            min="1"
+            value="1"
+            required
+        >
+
+    </div>
+
+
+    <!-- Ubicación -->
+
+    <div class="form-group">
+
+        <label>
+
+            Ubicación Inicial *
+
+        </label>
+
+        <select
+            name="ubicacion_id"
+            required
+        >
+
+            {% for ubicacion in ubicaciones %}
+
+            <option
+                value="{{ ubicacion.id }}"
+            >
+
+                {{ ubicacion.nombre }}
+
+            </option>
+
+            {% endfor %}
+
+        </select>
+
+    </div>
+
+
+    <!-- Estado -->
+
+    <div class="form-group">
+
+        <label>
+
+            Estado
+
+        </label>
+
+        <select
+            name="estado"
+        >
+
+            <option>
+
+                Disponible
+
+            </option>
+
+            <option>
+
+                Mantenimiento
+
+            </option>
+
+            <option>
+
+                Baja
+
+            </option>
+
+        </select>
+
+    </div>
+
+
+    <!-- Observaciones -->
+
+    <div class="form-group full">
+
+        <label>
+
+            Observaciones
+
+        </label>
+
+        <textarea
+
+            name="observaciones"
+
+            rows="4"
+
+        ></textarea>
+
+    </div>
+
+</div>
+
+
+<div class="form-actions">
+
+    <a
+        href="/activos"
+        class="btn-secondary"
+    >
+
+        Cancelar
+
+    </a>
+
+    <button
+        class="btn-primary"
+        type="submit"
+    >
+
+        <i class="bi bi-check-circle"></i>
+
+        Guardar Activos
+
+    </button>
+
+</div>
+
+</form>
+
+</div>
+
+{% endblock %}

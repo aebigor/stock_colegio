@@ -1,0 +1,366 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+<link rel="stylesheet" href="/static/css/activos.css">
+
+<div class="page-header">
+
+    <div>
+
+        <h1>Editar Activo</h1>
+
+        <p>Actualiza la información del activo.</p>
+
+    </div>
+
+</div>
+
+<div class="card-panel">
+
+<form
+    method="POST"
+    action="/activos/{{ activo.id }}/editar"
+>
+
+<!-- ========================= -->
+<!-- INFORMACIÓN GENERAL -->
+<!-- ========================= -->
+
+<h3 class="form-title">
+
+    Información General
+
+</h3>
+
+<div class="form-grid">
+
+    <div class="form-group">
+
+        <label>Código Interno</label>
+
+        <input
+            type="text"
+            value="{{ activo.codigo }}"
+            readonly
+        >
+
+    </div>
+
+    <div class="form-group">
+
+        <label>Código Colegio</label>
+
+        <input
+            type="text"
+            value="{{ activo.codigo_barras }}"
+            readonly
+        >
+
+    </div>
+
+    <div class="form-group">
+
+        <label>Nombre *</label>
+
+        <input
+            type="text"
+            name="nombre"
+            value="{{ activo.nombre }}"
+            required
+        >
+
+    </div>
+
+    <div class="form-group">
+
+        <label>Categoría *</label>
+
+        <select
+            name="categoria_id"
+            required
+        >
+
+            {% for categoria in categorias %}
+
+            <option
+                value="{{ categoria.id }}"
+                {% if categoria.id == activo.categoria_id %}
+                selected
+                {% endif %}
+            >
+
+                {{ categoria.nombre }}
+
+            </option>
+
+            {% endfor %}
+
+        </select>
+
+    </div>
+
+    <div class="form-group">
+
+        <label>Ubicación *</label>
+
+        <select
+            name="ubicacion_id"
+            required
+        >
+
+            {% for ubicacion in ubicaciones %}
+
+            <option
+                value="{{ ubicacion.id }}"
+                {% if ubicacion.id == activo.ubicacion_id %}
+                selected
+                {% endif %}
+            >
+
+                {{ ubicacion.nombre }}
+
+            </option>
+
+            {% endfor %}
+
+        </select>
+
+    </div>
+
+</div>
+
+<hr>
+
+<!-- ========================= -->
+<!-- INFORMACIÓN TÉCNICA -->
+<!-- ========================= -->
+
+<h3 class="form-title">
+
+    Información Técnica
+
+</h3>
+
+<div class="form-grid">
+
+    <div class="form-group">
+
+        <label>Serial</label>
+
+        <input
+            type="text"
+            name="serial"
+            value="{{ activo.serial or '' }}"
+            placeholder="Número de serial"
+        >
+
+    </div>
+
+    <div class="form-group">
+
+        <label>Marca</label>
+
+        <input
+            type="text"
+            name="marca"
+            value="{{ activo.marca or '' }}"
+        >
+
+    </div>
+
+    <div class="form-group">
+
+        <label>Modelo</label>
+
+        <input
+            type="text"
+            name="modelo"
+            value="{{ activo.modelo or '' }}"
+        >
+
+    </div>
+
+    <div class="form-group">
+
+        <label>Estado</label>
+
+        <select
+            name="estado"
+        >
+
+            <option
+                value="Disponible"
+                {% if activo.estado=="Disponible" %}
+                selected
+                {% endif %}
+            >
+                Disponible
+            </option>
+
+            <option
+                value="Prestado"
+                {% if activo.estado=="Prestado" %}
+                selected
+                {% endif %}
+            >
+                Prestado
+            </option>
+
+            <option
+                value="Mantenimiento"
+                {% if activo.estado=="Mantenimiento" %}
+                selected
+                {% endif %}
+            >
+                Mantenimiento
+            </option>
+
+            <option
+                value="Baja"
+                {% if activo.estado=="Baja" %}
+                selected
+                {% endif %}
+            >
+                Baja
+            </option>
+
+        </select>
+
+    </div>
+
+</div>
+
+<hr>
+
+<!-- ========================= -->
+<!-- OBSERVACIONES -->
+<!-- ========================= -->
+
+<h3 class="form-title">
+
+    Observaciones
+
+</h3>
+
+<div class="form-grid">
+
+    <div class="form-group full">
+
+        <textarea
+            name="observaciones"
+            rows="5"
+        >{{ activo.observaciones or '' }}</textarea>
+
+    </div>
+
+</div>
+
+<hr>
+
+<!-- ========================= -->
+<!-- BOTONES -->
+<!-- ========================= -->
+
+<div class="form-actions">
+
+    <a
+        href="/activos"
+        class="btn-secondary"
+    >
+
+        <i class="bi bi-arrow-left"></i>
+
+        Cancelar
+
+    </a>
+
+    <button
+        type="submit"
+        class="btn-primary"
+    >
+
+        <i class="bi bi-check-circle"></i>
+
+        Guardar Cambios
+
+    </button>
+
+</div>
+
+<hr>
+
+<!-- ========================= -->
+<!-- HERRAMIENTAS -->
+<!-- ========================= -->
+
+<h3 class="form-title">
+
+    Herramientas
+
+</h3>
+
+<div class="tools-grid">
+
+    <a
+        href="/activos/{{ activo.id }}/detalle"
+        class="tool-btn"
+    >
+
+        <i class="bi bi-eye"></i>
+
+        Ver Detalle
+
+    </a>
+
+    <a
+        href="/activos/{{ activo.id }}/barcode"
+        class="tool-btn"
+    >
+
+        <i class="bi bi-upc-scan"></i>
+
+        Código de Barras
+
+    </a>
+
+    <a
+        href="/activos/{{ activo.id }}/qr"
+        class="tool-btn"
+    >
+
+        <i class="bi bi-qr-code"></i>
+
+        Código QR
+
+    </a>
+
+    <a
+        href="/movimientos/crear?activo={{ activo.id }}"
+        class="tool-btn"
+    >
+
+        <i class="bi bi-arrow-left-right"></i>
+
+        Mover Activo
+
+    </a>
+
+    <a
+        href="/mantenimientos/crear?activo={{ activo.id }}"
+        class="tool-btn"
+    >
+
+        <i class="bi bi-tools"></i>
+
+        Mantenimiento
+
+    </a>
+
+</div>
+
+</form>
+
+</div>
+
+{% endblock %}

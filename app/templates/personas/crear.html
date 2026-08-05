@@ -1,0 +1,298 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+<link rel="stylesheet" href="/static/css/personas.css">
+
+<div class="page-header">
+
+    <div>
+
+        <h1>Registrar Persona</h1>
+
+        <p>Registrar docentes y funcionarios del colegio.</p>
+
+    </div>
+
+</div>
+
+<div class="card-panel">
+
+<form
+    method="POST"
+    action="/personas/crear"
+>
+
+<div class="form-grid">
+
+    <!-- Nombre -->
+
+    <div class="form-group">
+
+        <label>
+
+            Nombre Completo *
+
+        </label>
+
+        <input
+            type="text"
+            name="nombre"
+            required
+            placeholder="Ej: Juan Pérez Gómez"
+        >
+
+    </div>
+
+    <!-- Cargo -->
+
+    <div class="form-group">
+
+        <label>
+
+            Cargo *
+
+        </label>
+
+        <select
+            name="cargo"
+            required
+        >
+
+            <option value="">
+
+                Seleccione...
+
+            </option>
+
+            <option>Docente</option>
+
+            <option>Coordinador</option>
+
+            <option>Rector</option>
+
+            <option>Psicorientador</option>
+
+            <option>Secretaría</option>
+
+            <option>Bibliotecario</option>
+
+            <option>Auxiliar Administrativo</option>
+
+            <option>Sistemas</option>
+
+            <option>Servicios Generales</option>
+
+            <option>Vigilancia</option>
+
+        </select>
+
+    </div>
+
+    <!-- Área -->
+
+    <div class="form-group">
+
+        <label>
+
+            Área *
+
+        </label>
+
+        <select
+            name="area"
+            required
+        >
+
+            <option value="">
+
+                Seleccione...
+
+            </option>
+
+            <option>Tecnología</option>
+
+            <option>Matemáticas</option>
+
+            <option>Español</option>
+
+            <option>Inglés</option>
+
+            <option>Ciencias Naturales</option>
+
+            <option>Ciencias Sociales</option>
+
+            <option>Educación Física</option>
+
+            <option>Artes</option>
+
+            <option>Música</option>
+
+            <option>Preescolar</option>
+
+            <option>Primaria</option>
+
+            <option>Coordinación</option>
+
+            <option>Rectoría</option>
+
+            <option>Secretaría</option>
+
+            <option>Biblioteca</option>
+
+            <option>Sistemas</option>
+
+        </select>
+
+    </div>
+
+    <!-- Sede -->
+
+    <div class="form-group">
+
+        <label>
+
+            Sede *
+
+        </label>
+
+        <select
+            name="sede"
+            required
+        >
+
+            <option value="">
+
+                Seleccione...
+
+            </option>
+
+            <option>Principal</option>
+
+            <option>Santa Teresa</option>
+
+            <option>San José</option>
+
+            <option>Otra</option>
+
+        </select>
+
+    </div>
+
+    <!-- Correo -->
+
+    <div class="form-group">
+
+        <label>
+
+            Correo Electrónico
+
+        </label>
+
+        <input
+            type="email"
+            name="correo"
+            placeholder="correo@colegio.edu.co"
+        >
+
+    </div>
+
+    <!-- Teléfono -->
+
+    <div class="form-group">
+
+        <label>
+
+            Teléfono
+
+        </label>
+
+        <input
+            type="text"
+            name="telefono"
+            placeholder="3001234567"
+        >
+
+    </div>
+
+    <!-- Estado -->
+
+    <div class="form-group">
+
+        <label>
+
+            Estado
+
+        </label>
+
+        <select
+            name="activo"
+        >
+
+            <option value="true" selected>
+
+                Activo
+
+            </option>
+
+            <option value="false">
+
+                Inactivo
+
+            </option>
+
+        </select>
+
+    </div>
+
+    <!-- Observaciones -->
+
+    <div class="form-group full">
+
+        <label>
+
+            Observaciones
+
+        </label>
+
+        <textarea
+            name="observaciones"
+            rows="5"
+            placeholder="Información adicional..."
+        ></textarea>
+
+    </div>
+
+</div>
+
+<div class="form-actions">
+
+    <a
+        href="/personas"
+        class="btn-secondary"
+    >
+
+        <i class="bi bi-arrow-left"></i>
+
+        Cancelar
+
+    </a>
+
+    <button
+        type="submit"
+        class="btn-primary"
+    >
+
+        <i class="bi bi-check-circle"></i>
+
+        Guardar Persona
+
+    </button>
+
+</div>
+
+</form>
+
+</div>
+
+{% endblock %}

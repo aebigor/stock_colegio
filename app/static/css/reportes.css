@@ -1,0 +1,235 @@
+/* ===========================
+   HEADER
+=========================== */
+
+.page-header{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    margin-bottom:30px;
+
+}
+
+.page-header h1{
+
+    color:#1f2937;
+
+    margin:0;
+
+    font-size:32px;
+
+}
+
+.page-header p{
+
+    color:#6b7280;
+
+    margin-top:8px;
+
+}
+
+.acciones-reportes{
+
+    display:flex;
+
+    gap:15px;
+
+}
+
+/* ===========================
+   TARJETAS
+=========================== */
+
+.stats-grid{
+
+    display:grid;
+
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+
+    gap:20px;
+
+    margin-bottom:30px;
+
+}
+
+.stats-grid .stat-card{
+
+    background:#ffffff !important;
+
+    border-radius:14px;
+
+    padding:25px;
+
+    box-shadow:0 5px 18px rgba(0,0,0,.08);
+
+    border:1px solid #e5e7eb;
+
+    text-align:center;
+
+}
+
+.stats-grid .stat-card i{
+
+    font-size:36px;
+
+    color:#2563eb !important;
+
+    margin-bottom:12px;
+
+}
+
+.stats-grid .stat-card h2{
+
+    color:#111827 !important;
+
+    font-size:34px;
+
+    margin:10px 0;
+
+    font-weight:700;
+
+}
+
+.stats-grid .stat-card span{
+
+    color:#6b7280 !important;
+
+    font-size:15px;
+
+}
+
+/* ===========================
+   GRAFICAS
+=========================== */
+
+.graficas-grid{
+
+    display:grid;
+
+    grid-template-columns:repeat(auto-fit,minmax(500px,1fr));
+
+    gap:20px;
+
+    margin-bottom:25px;
+
+}
+
+.card-panel{
+
+    background:#ffffff !important;
+
+    border-radius:15px;
+
+    padding:25px;
+
+    box-shadow:0 5px 18px rgba(0,0,0,.08);
+
+    border:1px solid #e5e7eb;
+
+}
+
+.panel-header{
+
+    margin-bottom:20px;
+
+}
+
+.panel-header h3{
+
+    color:#111827 !important;
+
+    margin:0;
+
+    font-size:20px;
+
+    display:flex;
+
+    align-items:center;
+
+    gap:10px;
+
+}
+
+.panel-header i{
+
+    color:#2563eb;
+
+}
+
+/* ===========================
+   TABLA
+=========================== */
+
+.card-panel table{
+
+    width:100%;
+
+    border-collapse:collapse;
+
+}
+
+.card-panel thead{
+
+    background:#eff6ff;
+
+}
+
+.card-panel th{
+
+    color:#1f2937 !important;
+
+    padding:14px;
+
+    text-align:left;
+
+    font-weight:600;
+
+}
+
+.card-panel td{
+
+    color:#374151 !important;
+
+    padding:14px;
+
+    border-bottom:1px solid #ececec;
+
+}
+
+.card-panel tbody tr:hover{
+
+    background:#f9fafb;
+
+}
+
+/* ===========================
+   CANVAS
+=========================== */
+
+canvas{
+
+    width:100% !important;
+
+    height:350px !important;
+
+    background:white;
+
+}
+
+/* ===========================
+   RESPONSIVE
+=========================== */
+
+@media(max-width:900px){
+
+    .graficas-grid{
+
+        grid-template-columns:1fr;
+
+    }
+
+}

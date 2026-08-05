@@ -1,0 +1,75 @@
+.card-panel{
+
+    background:var(--card);
+
+    padding:30px;
+
+    border-radius:18px;
+
+    border:1px solid var(--border);
+
+}
+
+.form-control,
+.form-select{
+
+    background:#0f172a;
+
+    color:white;
+
+    border:1px solid var(--border);
+
+}
+
+.form-control:focus,
+.form-select:focus{
+
+    background:#0f172a;
+
+    color:white;
+
+    border-color:var(--cyan);
+
+    box-shadow:none;
+
+}
+
+textarea{
+
+    resize:none;
+
+}
+
+.btn-primary{
+
+    background:var(--cyan);
+
+    color:#001018;
+
+    padding:12px 28px;
+
+    border:none;
+
+    border-radius:12px;
+
+    font-weight:600;
+
+}
+
+.btn-primary:hover{
+
+    opacity:.9;
+
+}
+
+.btn-secondary{
+
+    background:#1e293b;
+
+    color:white;
+
+    padding:12px 28px;
+
+    border-radius:12px;
+
+}

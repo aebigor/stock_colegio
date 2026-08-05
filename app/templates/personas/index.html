@@ -1,0 +1,307 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+<link rel="stylesheet" href="/static/css/personas.css">
+
+<div class="page-header">
+
+    <div>
+
+        <h1>Personas</h1>
+
+        <p>Administra docentes, administrativos y funcionarios.</p>
+
+    </div>
+
+    <a
+        href="/personas/crear"
+        class="btn-primary"
+    >
+
+        <i class="bi bi-plus-circle"></i>
+
+        Nueva Persona
+
+    </a>
+
+</div>
+
+
+<!-- ===========================
+     TARJETAS
+============================ -->
+
+<div class="stats-grid">
+
+    <div class="stat-card">
+
+        <i class="bi bi-people-fill"></i>
+
+        <h3>
+
+            {{ personas|length }}
+
+        </h3>
+
+        <span>
+
+            Total Personas
+
+        </span>
+
+    </div>
+
+    <div class="stat-card">
+
+        <i class="bi bi-person-workspace"></i>
+
+        <h3>
+
+            {{ personas|selectattr("cargo","equalto","Docente")|list|length }}
+
+        </h3>
+
+        <span>
+
+            Docentes
+
+        </span>
+
+    </div>
+
+    <div class="stat-card">
+
+        <i class="bi bi-building"></i>
+
+        <h3>
+
+            {{ personas|map(attribute='area')|unique|list|length }}
+
+        </h3>
+
+        <span>
+
+            Áreas
+
+        </span>
+
+    </div>
+
+    <div class="stat-card">
+
+        <i class="bi bi-check-circle-fill"></i>
+
+        <h3>
+
+            {{ personas|selectattr("activo")|list|length }}
+
+        </h3>
+
+        <span>
+
+            Activos
+
+        </span>
+
+    </div>
+
+</div>
+
+
+<!-- ===========================
+     TABLA
+============================ -->
+
+<div class="card-panel">
+
+    <div class="table-header">
+
+        <input
+            type="text"
+            id="buscar"
+            class="search-input"
+            placeholder="Buscar persona..."
+        >
+
+    </div>
+
+    <table id="tablaPersonas">
+
+        <thead>
+
+            <tr>
+
+                <th>Nombre</th>
+
+                <th>Cargo</th>
+
+                <th>Área</th>
+
+                <th>Sede</th>
+
+                <th>Correo</th>
+
+                <th>Estado</th>
+
+                <th width="170">
+
+                    Acciones
+
+                </th>
+
+            </tr>
+
+        </thead>
+
+        <tbody>
+
+        {% for persona in personas %}
+
+            <tr>
+
+                <td>
+
+                    <strong>
+
+                        {{ persona.nombre }}
+
+                    </strong>
+
+                </td>
+
+                <td>
+
+                    {{ persona.cargo }}
+
+                </td>
+
+                <td>
+
+                    {{ persona.area }}
+
+                </td>
+
+                <td>
+
+                    {{ persona.sede }}
+
+                </td>
+
+                <td>
+
+                    {{ persona.correo or "-" }}
+
+                </td>
+
+                <td>
+
+                    {% if persona.activo %}
+
+                        <span class="badge-success">
+
+                            Activo
+
+                        </span>
+
+                    {% else %}
+
+                        <span class="badge-danger">
+
+                            Inactivo
+
+                        </span>
+
+                    {% endif %}
+
+                </td>
+
+                <td class="actions">
+
+                    <a
+                        href="/personas/{{ persona.id }}"
+                        title="Ver"
+                    >
+
+                        <i class="bi bi-eye-fill"></i>
+
+                    </a>
+
+                    <a
+                        href="/personas/{{ persona.id }}/editar"
+                        title="Editar"
+                    >
+
+                        <i class="bi bi-pencil-fill"></i>
+
+                    </a>
+
+                    <a
+                        href="/personas/{{ persona.id }}/estado"
+                        title="Cambiar Estado"
+                    >
+
+                        {% if persona.activo %}
+
+                            <i class="bi bi-toggle-on"></i>
+
+                        {% else %}
+
+                            <i class="bi bi-toggle-off"></i>
+
+                        {% endif %}
+
+                    </a>
+
+                </td>
+
+            </tr>
+
+        {% else %}
+
+            <tr>
+
+                <td colspan="7">
+
+                    <center>
+
+                        No existen personas registradas.
+
+                    </center>
+
+                </td>
+
+            </tr>
+
+        {% endfor %}
+
+        </tbody>
+
+    </table>
+
+</div>
+
+
+<script>
+
+const buscar = document.getElementById("buscar");
+
+buscar.addEventListener("keyup", function(){
+
+    let valor = this.value.toLowerCase();
+
+    let filas = document.querySelectorAll("#tablaPersonas tbody tr");
+
+    filas.forEach(fila=>{
+
+        fila.style.display = fila.innerText.toLowerCase().includes(valor)
+            ? ""
+            : "none";
+
+    });
+
+});
+
+</script>
+
+{% endblock %}

@@ -1,0 +1,133 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+<div class="welcome">
+
+    <h1>👋 Bienvenido, Administrador</h1>
+
+    <p>
+        Gestiona todos los activos del colegio desde un solo lugar.
+    </p>
+
+</div>
+
+<div class="cards">
+
+    <div class="card-box">
+
+        <div class="card-icon">
+
+            <i class="bi bi-pc-display"></i>
+
+        </div>
+
+        <h3>0</h3>
+
+        <span>Total de Activos</span>
+
+    </div>
+
+    <div class="card-box">
+
+        <div class="card-icon">
+
+            <i class="bi bi-check-circle"></i>
+
+        </div>
+
+        <h3>0</h3>
+
+        <span>Disponibles</span>
+
+    </div>
+
+    <div class="card-box">
+
+        <div class="card-icon">
+
+            <i class="bi bi-person-workspace"></i>
+
+        </div>
+
+        <h3>0</h3>
+
+        <span>Prestados</span>
+
+    </div>
+
+    <div class="card-box">
+
+        <div class="card-icon">
+
+            <i class="bi bi-tools"></i>
+
+        </div>
+
+        <h3>0</h3>
+
+        <span>Mantenimiento</span>
+
+    </div>
+
+</div>
+
+<div class="activity">
+
+    <h2>
+
+        <i class="bi bi-lightning-charge-fill"></i>
+
+        Acciones rápidas
+
+    </h2>
+
+    <div class="quick-buttons">
+
+        <a href="/movimientos/nuevo" class="action-btn">
+
+            <i class="bi bi-arrow-left-right"></i>
+
+            Nuevo Movimiento
+
+        </a>
+
+        <a href="/activos" class="action-btn">
+
+            <i class="bi bi-box-seam"></i>
+
+            Registrar Activo
+
+        </a>
+
+        <a href="/reportes" class="action-btn">
+
+            <i class="bi bi-file-earmark-bar-graph"></i>
+
+            Reportes
+
+        </a>
+
+    </div>
+
+</div>
+
+<div class="activity">
+
+    <h2>
+
+        <i class="bi bi-clock-history"></i>
+
+        Últimos movimientos
+
+    </h2>
+
+    <div class="activity-item">
+
+        <span>No existen movimientos registrados.</span>
+
+    </div>
+
+</div>
+
+{% endblock %}

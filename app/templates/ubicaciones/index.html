@@ -1,0 +1,148 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+<link rel="stylesheet" href="/static/css/ubicaciones.css">
+
+<div class="page-header">
+
+    <div>
+
+        <h1>Ubicaciones</h1>
+
+        <p>
+
+            Administra todas las ubicaciones del colegio.
+
+        </p>
+
+    </div>
+
+    <a href="/ubicaciones/crear" class="btn-primary">
+
+        <i class="bi bi-plus-circle"></i>
+
+        Nueva Ubicación
+
+    </a>
+
+</div>
+
+
+<div class="card-panel">
+
+    <div class="table-header">
+
+        <input
+            type="text"
+            class="search-input"
+            placeholder="Buscar ubicación..."
+        >
+
+    </div>
+
+    <table>
+
+        <thead>
+
+            <tr>
+
+                <th>ID</th>
+
+                <th>Código</th>
+
+                <th>Nombre</th>
+
+                <th>Tipo</th>
+
+                <th>Bloque</th>
+
+                <th>Piso</th>
+
+                <th>Estado</th>
+
+                <th>Acciones</th>
+
+            </tr>
+
+        </thead>
+
+        <tbody>
+
+        {% for ubicacion in ubicaciones %}
+
+            <tr>
+
+                <td>{{ ubicacion.id }}</td>
+
+                <td>{{ ubicacion.codigo }}</td>
+
+                <td>{{ ubicacion.nombre }}</td>
+
+                <td>{{ ubicacion.tipo.nombre }}</td>
+
+                <td>{{ ubicacion.bloque }}</td>
+
+                <td>{{ ubicacion.piso }}</td>
+
+                <td>
+
+                    {% if ubicacion.activo %}
+
+                        <span class="badge-success">
+
+                            Activo
+
+                        </span>
+
+                    {% else %}
+
+                        <span class="badge-danger">
+
+                            Inactivo
+
+                        </span>
+
+                    {% endif %}
+
+                </td>
+
+                <td>
+
+<a
+href="/ubicaciones/{{ ubicacion.id }}/editar"
+class="btn btn-sm btn-warning">
+
+<i class="bi bi-pencil-square"></i>
+
+</a>
+
+<a
+href="/ubicaciones/{{ ubicacion.id }}/estado"
+class="btn btn-sm btn-secondary">
+
+{% if ubicacion.activo %}
+
+<i class="bi bi-eye-slash"></i>
+
+{% else %}
+
+<i class="bi bi-eye"></i>
+
+{% endif %}
+
+</a>
+
+</td>
+
+            </tr>
+
+        {% endfor %}
+
+        </tbody>
+
+    </table>
+
+</div>
+
+{% endblock %}

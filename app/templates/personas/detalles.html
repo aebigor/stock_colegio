@@ -1,0 +1,204 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+<link rel="stylesheet" href="/static/css/personas.css">
+
+<div class="page-header">
+
+    <div>
+
+        <h1>
+
+            {{ persona.nombre }}
+
+        </h1>
+
+        <p>
+
+            Información completa del funcionario.
+
+        </p>
+
+    </div>
+
+    <a
+        href="/personas"
+        class="btn-secondary"
+    >
+
+        <i class="bi bi-arrow-left"></i>
+
+        Regresar
+
+    </a>
+
+</div>
+
+<div class="card-panel">
+
+    <div class="detalle-grid">
+
+        <div class="detalle-item">
+
+            <span>Cargo</span>
+
+            <strong>
+
+                {{ persona.cargo }}
+
+            </strong>
+
+        </div>
+
+        <div class="detalle-item">
+
+            <span>Área</span>
+
+            <strong>
+
+                {{ persona.area }}
+
+            </strong>
+
+        </div>
+
+        <div class="detalle-item">
+
+            <span>Sede</span>
+
+            <strong>
+
+                {{ persona.sede }}
+
+            </strong>
+
+        </div>
+
+        <div class="detalle-item">
+
+            <span>Correo</span>
+
+            <strong>
+
+                {{ persona.correo or "-" }}
+
+            </strong>
+
+        </div>
+
+        <div class="detalle-item">
+
+            <span>Teléfono</span>
+
+            <strong>
+
+                {{ persona.telefono or "-" }}
+
+            </strong>
+
+        </div>
+
+        <div class="detalle-item">
+
+            <span>Estado</span>
+
+            <strong>
+
+                {% if persona.activo %}
+
+                    <span class="badge-success">
+
+                        Activo
+
+                    </span>
+
+                {% else %}
+
+                    <span class="badge-danger">
+
+                        Inactivo
+
+                    </span>
+
+                {% endif %}
+
+            </strong>
+
+        </div>
+
+    </div>
+
+</div>
+
+<br>
+
+<div class="card-panel">
+
+    <h3>
+
+        Observaciones
+
+    </h3>
+
+    <p>
+
+        {{ persona.observaciones or "Sin observaciones." }}
+
+    </p>
+
+</div>
+
+<br>
+
+<div class="card-panel">
+
+    <h3>
+
+        Historial de Activos
+
+    </h3>
+
+    <br>
+
+    <table>
+
+        <thead>
+
+            <tr>
+
+                <th>Fecha</th>
+
+                <th>Activo</th>
+
+                <th>Movimiento</th>
+
+                <th>Estado</th>
+
+            </tr>
+
+        </thead>
+
+        <tbody>
+
+            <tr>
+
+                <td colspan="4">
+
+                    <center>
+
+                        Aún no existen movimientos registrados.
+
+                    </center>
+
+                </td>
+
+            </tr>
+
+        </tbody>
+
+    </table>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,207 @@
+.page-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:30px;
+}
+
+.card-panel{
+    background:#fff;
+    border-radius:14px;
+    padding:30px;
+    box-shadow:0 10px 25px rgba(0,0,0,.08);
+}
+
+.form-grid{
+
+    display:grid;
+
+    grid-template-columns:repeat(2,1fr);
+
+    gap:20px;
+
+}
+
+.form-group{
+
+    display:flex;
+
+    flex-direction:column;
+
+}
+
+.form-group.full{
+
+    grid-column:1/-1;
+
+}
+
+label{
+
+    font-weight:600;
+
+    margin-bottom:8px;
+
+    color:#34495e;
+
+}
+
+input,
+select,
+textarea{
+
+    border:1px solid #d8e2ef;
+
+    border-radius:10px;
+
+    padding:12px;
+
+    font-size:15px;
+
+    transition:.2s;
+
+    background:#f8fbff;
+
+}
+
+input:focus,
+select:focus,
+textarea:focus{
+
+    outline:none;
+
+    border-color:#4e73df;
+
+    box-shadow:0 0 0 4px rgba(78,115,223,.15);
+
+    background:white;
+
+}
+
+textarea{
+
+    resize:vertical;
+
+    min-height:120px;
+
+}
+
+.btn-group{
+
+    margin-top:30px;
+
+    display:flex;
+
+    justify-content:flex-end;
+
+    gap:15px;
+
+}
+
+.btn-primary{
+
+    background:#4e73df;
+
+    color:white;
+
+    padding:12px 22px;
+
+    border-radius:10px;
+
+    text-decoration:none;
+
+    border:none;
+
+    cursor:pointer;
+
+}
+
+.btn-primary:hover{
+
+    background:#355fd6;
+
+}
+
+.btn-secondary{
+
+    background:#e9ecef;
+
+    color:#2c3e50;
+
+    padding:12px 22px;
+
+    border-radius:10px;
+
+    text-decoration:none;
+
+}
+
+.preview-card{
+
+    margin-bottom:30px;
+
+    display:flex;
+
+    gap:25px;
+
+    align-items:center;
+
+    background:#f7faff;
+
+    border:1px solid #dfe8f4;
+
+    border-radius:12px;
+
+    padding:20px;
+
+}
+
+.preview-card h3{
+
+    margin:0;
+
+}
+
+.preview-card p{
+
+    margin:4px 0;
+
+}
+
+.badge{
+
+    display:inline-block;
+
+    padding:5px 12px;
+
+    border-radius:20px;
+
+    background:#dbeafe;
+
+    color:#1e40af;
+
+    font-size:13px;
+
+    font-weight:600;
+
+}
+
+canvas{
+
+    border:2px dashed #d0d8e5;
+
+    border-radius:10px;
+
+    background:white;
+
+}
+
+@media(max-width:900px){
+
+.form-grid{
+
+grid-template-columns:1fr;
+
+}
+
+}

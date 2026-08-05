@@ -1,0 +1,213 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+<link rel="stylesheet" href="/static/css/categorias.css">
+
+<div class="page-header">
+
+    <div>
+
+        <h2>Editar Categoría</h2>
+
+        <p>Actualiza la información de la categoría.</p>
+
+    </div>
+
+</div>
+
+<form method="post">
+
+<div class="card-panel">
+
+    <div class="row">
+
+        <div class="col-md-6 mb-3">
+
+            <label>Nombre</label>
+
+            <input
+                type="text"
+                class="form-control"
+                name="nombre"
+                value="{{ categoria.nombre }}"
+                required
+            >
+
+        </div>
+
+        <div class="col-md-6 mb-3">
+
+            <label>Prefijo</label>
+
+            <input
+                type="text"
+                class="form-control"
+                name="prefijo"
+                maxlength="5"
+                value="{{ categoria.prefijo }}"
+                required
+            >
+
+        </div>
+
+        <div class="col-12 mb-3">
+
+            <label>Descripción</label>
+
+            <textarea
+                class="form-control"
+                rows="3"
+                name="descripcion"
+            >{{ categoria.descripcion }}</textarea>
+
+        </div>
+
+        <div class="col-md-6 mb-3">
+
+            <label>Ícono Bootstrap</label>
+
+            <input
+                type="text"
+                class="form-control"
+                name="icono"
+                value="{{ categoria.icono }}"
+            >
+
+        </div>
+
+        <div class="col-md-6 mb-3">
+
+            <label>Color</label>
+
+            <input
+                type="color"
+                class="form-control form-control-color"
+                name="color"
+                value="{{ categoria.color }}"
+            >
+
+        </div>
+
+    </div>
+
+    <hr>
+
+    <h5>Configuración</h5>
+
+    <div class="row">
+
+        <div class="col-md-3">
+
+            <div class="form-check form-switch">
+
+                <input
+                    class="form-check-input"
+                    type="checkbox"
+                    name="permite_prestamo"
+                    {% if categoria.permite_prestamo %}checked{% endif %}
+                >
+
+                <label>Permite préstamo</label>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-3">
+
+            <div class="form-check form-switch">
+
+                <input
+                    class="form-check-input"
+                    type="checkbox"
+                    name="requiere_firma"
+                    {% if categoria.requiere_firma %}checked{% endif %}
+                >
+
+                <label>Requiere firma</label>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-3">
+
+            <div class="form-check form-switch">
+
+                <input
+                    class="form-check-input"
+                    type="checkbox"
+                    name="requiere_mantenimiento"
+                    {% if categoria.requiere_mantenimiento %}checked{% endif %}
+                >
+
+                <label>Mantenimiento</label>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-3">
+
+            <div class="form-check form-switch">
+
+                <input
+                    class="form-check-input"
+                    type="checkbox"
+                    name="genera_qr"
+                    {% if categoria.genera_qr %}checked{% endif %}
+                >
+
+                <label>Generar QR</label>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="row mt-3">
+
+        <div class="col-md-3">
+
+            <div class="form-check form-switch">
+
+                <input
+                    class="form-check-input"
+                    type="checkbox"
+                    name="genera_codigo_barras"
+                    {% if categoria.genera_codigo_barras %}checked{% endif %}
+                >
+
+                <label>Código de barras</label>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <hr>
+
+    <button class="btn btn-warning">
+
+        <i class="bi bi-pencil-square"></i>
+
+        Actualizar
+
+    </button>
+
+    <a
+        href="/categorias"
+        class="btn btn-secondary">
+
+        Cancelar
+
+    </a>
+
+</div>
+
+</form>
+
+{% endblock %}

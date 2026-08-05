@@ -1,0 +1,479 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+<link rel="stylesheet" href="/static/css/movimientos.css">
+
+<div class="page-header">
+
+    <div>
+
+        <h1>
+
+            Registrar Movimiento
+
+        </h1>
+
+        <p>
+
+            Registra la entrega, devolución, traslado o mantenimiento del activo.
+
+        </p>
+
+    </div>
+
+</div>
+
+<form
+    method="POST"
+    enctype="multipart/form-data"
+    class="card-panel"
+>
+
+    <h3 class="section-title">
+
+        Información del Activo
+
+    </h3>
+
+    <div class="grid-2">
+
+        <div class="form-group">
+
+            <label>Código</label>
+
+            <input
+                type="text"
+                value="{{ activo.codigo_barras }}"
+                disabled
+            >
+
+        </div>
+
+        <div class="form-group">
+
+            <label>Serial</label>
+
+            <input
+                type="text"
+                value="{{ activo.serial }}"
+                disabled
+            >
+
+        </div>
+
+        <div class="form-group">
+
+            <label>Nombre</label>
+
+            <input
+                type="text"
+                value="{{ activo.nombre }}"
+                disabled
+            >
+
+        </div>
+
+        <div class="form-group">
+
+            <label>Categoría</label>
+
+            <input
+                type="text"
+                value="{{ activo.categoria.nombre }}"
+                disabled
+            >
+
+        </div>
+
+        <div class="form-group">
+
+            <label>Estado Actual</label>
+
+            <input
+                type="text"
+                value="{{ activo.estado }}"
+                disabled
+            >
+
+        </div>
+
+        <div class="form-group">
+
+            <label>Ubicación Actual</label>
+
+            <input
+                type="text"
+                value="{{ activo.ubicacion.nombre }}"
+                disabled
+            >
+
+        </div>
+
+    </div>
+
+    <hr>
+
+    <h3 class="section-title">
+
+        Movimiento
+
+    </h3>
+
+    <div class="grid-2">
+
+        <div class="form-group">
+
+            <label>Tipo de Movimiento</label>
+
+            <select
+                name="tipo"
+                required
+            >
+
+                <option value="Entrega">
+
+                    Entrega
+
+                </option>
+
+                <option value="Devolucion">
+
+                    Devolución
+
+                </option>
+
+                <option value="Cambio Ubicacion">
+
+                    Cambio de Ubicación
+
+                </option>
+
+                <option value="Mantenimiento">
+
+                    Mantenimiento
+
+                </option>
+
+                <option value="Salida Mantenimiento">
+
+                    Salida de Mantenimiento
+
+                </option>
+
+                <option value="Baja">
+
+                    Baja
+
+                </option>
+
+            </select>
+
+        </div>
+
+        <div class="form-group">
+
+            <label>
+
+                Responsable
+
+            </label>
+
+            <select
+                name="persona_id"
+            >
+
+                <option value="">
+
+                    Sin responsable
+
+                </option>
+
+                {% for persona in personas %}
+
+                <option value="{{ persona.id }}">
+
+                    {{ persona.nombre }}
+
+                </option>
+
+                {% endfor %}
+
+            </select>
+
+        </div>
+
+        <div class="form-group">
+
+            <label>
+
+                Ubicación destino
+
+                <small>(Opcional)</small>
+
+            </label>
+
+            <select
+                name="ubicacion_destino_id"
+            >
+
+                <option value="">
+
+                    No cambiar ubicación
+
+                </option>
+
+                {% for ubicacion in ubicaciones %}
+
+                <option value="{{ ubicacion.id }}">
+
+                    {{ ubicacion.nombre }}
+
+                </option>
+
+                {% endfor %}
+
+            </select>
+
+        </div>
+
+        <div class="form-group">
+
+            <label>
+
+                Estado del Activo
+
+            </label>
+
+            <select
+                name="estado_nuevo"
+                required
+            >
+
+                <option>
+
+                    Excelente
+
+                </option>
+
+                <option>
+
+                    Bueno
+
+                </option>
+
+                <option>
+
+                    Regular
+
+                </option>
+
+                <option>
+
+                    Malo
+
+                </option>
+
+            </select>
+
+        </div>
+
+    </div>
+
+    <hr>
+
+    <h3 class="section-title">
+
+        Accesorios Entregados
+
+    </h3>
+
+    <div class="checks-grid">
+
+        <label>
+
+            <input
+                type="checkbox"
+                name="cargador"
+            >
+
+            Cargador
+
+        </label>
+
+        <label>
+
+            <input
+                type="checkbox"
+                name="mouse"
+            >
+
+            Mouse
+
+        </label>
+
+        <label>
+
+            <input
+                type="checkbox"
+                name="teclado"
+            >
+
+            Teclado
+
+        </label>
+
+        <label>
+
+            <input
+                type="checkbox"
+                name="hdmi"
+            >
+
+            HDMI
+
+        </label>
+
+        <label>
+
+            <input
+                type="checkbox"
+                name="maletin"
+            >
+
+            Maletín
+
+        </label>
+
+    </div>
+
+    <hr>
+
+    <div class="form-group">
+
+        <label>
+
+            Observaciones
+
+        </label>
+
+        <textarea
+            rows="5"
+            name="observaciones"
+        ></textarea>
+
+    </div>
+
+    <div class="form-group">
+
+        <label>
+
+            Fotografía del Activo
+
+            <small>(Opcional)</small>
+
+        </label>
+
+        <input
+            type="file"
+            name="foto"
+            accept="image/*"
+        >
+
+    </div>
+
+    <hr>
+
+    <h3 class="section-title">
+
+        Firma del Responsable
+
+    </h3>
+
+    <div class="firma-box">
+
+        <canvas
+            id="signature-pad"
+            width="900"
+            height="250"
+        ></canvas>
+
+    </div>
+
+    <input
+        type="hidden"
+        id="firma"
+        name="firma"
+    >
+
+    <button
+        type="button"
+        id="limpiarFirma"
+        class="btn-secondary"
+    >
+
+        Limpiar Firma
+
+    </button>
+
+    <br><br>
+
+    <button
+        class="btn-primary"
+        type="submit"
+    >
+
+        Registrar Movimiento
+
+    </button>
+
+    <a
+        href="/activos"
+        class="btn-secondary"
+    >
+
+        Cancelar
+
+    </a>
+
+</form>
+
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+
+<script>
+
+const canvas = document.getElementById("signature-pad");
+
+const signaturePad = new SignaturePad(canvas);
+
+document.querySelector("form").addEventListener(
+
+    "submit",
+
+    function(){
+
+        document.getElementById("firma").value=
+
+        signaturePad.toDataURL();
+
+    }
+
+);
+
+document.getElementById("limpiarFirma")
+
+.addEventListener(
+
+    "click",
+
+    function(){
+
+        signaturePad.clear();
+
+    }
+
+);
+
+</script>
+
+{% endblock %}

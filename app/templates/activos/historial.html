@@ -1,0 +1,139 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+<link rel="stylesheet" href="/static/css/activos.css">
+
+<div class="page-header">
+
+    <div>
+
+        <h1>Historial del Activo</h1>
+
+        <p>{{ activo.codigo }} - {{ activo.nombre }}</p>
+
+    </div>
+
+</div>
+
+<div class="card-panel">
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>Fecha</th>
+
+<th>Movimiento</th>
+
+<th>Profesor</th>
+
+<th>Ubicación</th>
+
+<th>Estado</th>
+
+<th>Usuario</th>
+
+<th>Observaciones</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+{% for item in historial %}
+
+<tr>
+
+<td>
+
+{{ item.created_at.strftime("%d/%m/%Y %H:%M") }}
+
+</td>
+
+<td>
+
+{{ item.tipo }}
+
+</td>
+
+<td>
+
+{% if item.persona %}
+
+{{ item.persona.nombre }}
+
+{% else %}
+
+—
+
+{% endif %}
+
+</td>
+
+<td>
+
+{% if item.ubicacion %}
+
+{{ item.ubicacion.nombre }}
+
+{% else %}
+
+—
+
+{% endif %}
+
+</td>
+
+<td>
+
+<span class="badge-success">
+
+{{ item.estado }}
+
+</span>
+
+</td>
+
+<td>
+
+{{ item.usuario }}
+
+</td>
+
+<td>
+
+{{ item.observaciones }}
+
+</td>
+
+</tr>
+
+{% else %}
+
+<tr>
+
+<td colspan="7">
+
+<center>
+
+No existen movimientos registrados.
+
+</center>
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+{% endblock %}

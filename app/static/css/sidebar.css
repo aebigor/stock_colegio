@@ -1,0 +1,306 @@
+/* ===========================
+   SIDEBAR
+=========================== */
+
+.sidebar{
+
+    width:270px;
+    background:var(--sidebar);
+    border-right:1px solid rgba(255,255,255,.08);
+
+    display:flex;
+    flex-direction:column;
+
+    transition:.35s;
+
+}
+
+/* ===========================
+   LOGO
+=========================== */
+
+.logo{
+
+    height:90px;
+
+    display:flex;
+    align-items:center;
+    gap:15px;
+
+    padding:20px;
+
+    border-bottom:1px solid rgba(255,255,255,.08);
+
+}
+
+.logo i{
+
+    font-size:34px;
+
+    color:var(--cyan);
+
+    text-shadow:0 0 20px var(--cyan);
+
+}
+
+.logo h5{
+
+    margin:0;
+
+    color:white;
+
+    font-size:18px;
+
+}
+
+.logo small{
+
+    color:var(--text2);
+
+}
+
+/* ===========================
+   SECCIONES
+=========================== */
+
+.menu-section{
+
+    padding:18px 15px 0;
+
+}
+
+.menu-title{
+
+    display:block;
+
+    margin-bottom:12px;
+
+    font-size:11px;
+
+    letter-spacing:2px;
+
+    color:#6B7280;
+
+    font-weight:700;
+
+    text-transform:uppercase;
+
+}
+
+/* ===========================
+   LINKS
+=========================== */
+
+.menu-link{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:15px;
+
+    padding:14px 16px;
+
+    margin-bottom:8px;
+
+    border-radius:12px;
+
+    text-decoration:none;
+
+    color:var(--text2);
+
+    transition:.30s;
+
+    position:relative;
+
+}
+
+.menu-link:hover{
+
+    background:rgba(0,229,255,.10);
+
+    color:white;
+
+    transform:translateX(6px);
+
+    box-shadow:0 0 18px rgba(0,229,255,.18);
+
+}
+
+.menu-link.active{
+
+    background:linear-gradient(
+        90deg,
+        rgba(0,229,255,.18),
+        rgba(139,92,246,.18)
+    );
+
+    color:white;
+
+    border-left:4px solid var(--cyan);
+
+}
+
+.menu-link i{
+
+    font-size:21px;
+
+    color:var(--cyan);
+
+    width:22px;
+
+    text-align:center;
+
+}
+
+/* ===========================
+   CONTADOR
+=========================== */
+
+.badge-menu{
+
+    margin-left:auto;
+
+    min-width:26px;
+
+    height:26px;
+
+    border-radius:13px;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    background:rgba(0,229,255,.15);
+
+    color:var(--cyan);
+
+    font-size:12px;
+
+    font-weight:bold;
+
+}
+
+/* ===========================
+   LOGOUT
+=========================== */
+
+.logout{
+
+    margin-top:auto;
+
+    padding:20px;
+
+    border-top:1px solid rgba(255,255,255,.08);
+
+}
+
+.logout a{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:15px;
+
+    text-decoration:none;
+
+    color:#EF4444;
+
+    padding:14px;
+
+    border-radius:12px;
+
+    transition:.30s;
+
+}
+
+.logout a:hover{
+
+    background:rgba(239,68,68,.15);
+
+    color:white;
+
+}
+
+/* =======================================
+   SIDEBAR COLAPSADO
+======================================= */
+
+.sidebar.collapsed{
+
+    width:90px;
+
+}
+
+/* Logo */
+
+.sidebar.collapsed .logo{
+
+    justify-content:center;
+
+    padding:0;
+
+}
+
+.sidebar.collapsed .logo div{
+
+    display:none;
+
+}
+
+.sidebar.collapsed .logo i{
+
+    font-size:42px;
+
+}
+
+/* Títulos */
+
+.sidebar.collapsed .menu-title{
+
+    display:none;
+
+}
+
+/* Links */
+
+.sidebar.collapsed .menu-link{
+
+    justify-content:center;
+
+    padding:16px;
+
+}
+
+/* Texto */
+
+.sidebar.collapsed .menu-link span{
+
+    display:none;
+
+}
+
+/* Badge */
+
+.sidebar.collapsed .badge-menu{
+
+    display:none;
+
+}
+
+/* Logout */
+
+.sidebar.collapsed .logout a{
+
+    justify-content:center;
+
+}
+
+.sidebar.collapsed .logout a span{
+
+    display:none;
+
+}
