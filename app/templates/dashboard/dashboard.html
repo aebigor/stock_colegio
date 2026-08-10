@@ -2,131 +2,292 @@
 
 {% block content %}
 
+<link rel="stylesheet" href="/static/css/dashboard.css">
+
 <div class="welcome">
 
-    <h1>👋 Bienvenido, Administrador</h1>
+    <h1>Panel Principal</h1>
 
     <p>
-        Gestiona todos los activos del colegio desde un solo lugar.
+        Bienvenido al Sistema de Inventario Escolar.
     </p>
 
 </div>
 
-<div class="cards">
 
-    <div class="card-box">
+<div class="stats-grid">
 
-        <div class="card-icon">
+    <div class="stat-card">
 
-            <i class="bi bi-pc-display"></i>
+        <i class="bi bi-pc-display"></i>
 
-        </div>
+        <h2>{{ total }}</h2>
 
-        <h3>0</h3>
-
-        <span>Total de Activos</span>
+        <span>Total Activos</span>
 
     </div>
 
-    <div class="card-box">
+    <div class="stat-card">
 
-        <div class="card-icon">
+        <i class="bi bi-check-circle-fill"></i>
 
-            <i class="bi bi-check-circle"></i>
-
-        </div>
-
-        <h3>0</h3>
+        <h2>{{ disponibles }}</h2>
 
         <span>Disponibles</span>
 
     </div>
 
-    <div class="card-box">
+    <div class="stat-card">
 
-        <div class="card-icon">
+        <i class="bi bi-arrow-left-right"></i>
 
-            <i class="bi bi-person-workspace"></i>
-
-        </div>
-
-        <h3>0</h3>
+        <h2>{{ prestados }}</h2>
 
         <span>Prestados</span>
 
     </div>
 
-    <div class="card-box">
+    <div class="stat-card">
 
-        <div class="card-icon">
+        <i class="bi bi-tools"></i>
 
-            <i class="bi bi-tools"></i>
-
-        </div>
-
-        <h3>0</h3>
+        <h2>{{ mantenimiento }}</h2>
 
         <span>Mantenimiento</span>
 
     </div>
 
-</div>
+    <div class="stat-card">
 
-<div class="activity">
+        <i class="bi bi-trash"></i>
 
-    <h2>
+        <h2>{{ baja }}</h2>
 
-        <i class="bi bi-lightning-charge-fill"></i>
+        <span>Dados de Baja</span>
 
-        Acciones rápidas
+    </div>
 
-    </h2>
+    <div class="stat-card">
 
-    <div class="quick-buttons">
+        <i class="bi bi-tags-fill"></i>
 
-        <a href="/movimientos/nuevo" class="action-btn">
+        <h2>{{ categorias }}</h2>
 
-            <i class="bi bi-arrow-left-right"></i>
-
-            Nuevo Movimiento
-
-        </a>
-
-        <a href="/activos" class="action-btn">
-
-            <i class="bi bi-box-seam"></i>
-
-            Registrar Activo
-
-        </a>
-
-        <a href="/reportes" class="action-btn">
-
-            <i class="bi bi-file-earmark-bar-graph"></i>
-
-            Reportes
-
-        </a>
+        <span>Categorías</span>
 
     </div>
 
 </div>
 
+
+<div class="dashboard-grid">
+
 <div class="activity">
 
-    <h2>
+<h2>
 
-        <i class="bi bi-clock-history"></i>
+<i class="bi bi-clock-history"></i>
 
-        Últimos movimientos
+Últimos Movimientos
 
-    </h2>
+</h2>
 
-    <div class="activity-item">
+<table>
 
-        <span>No existen movimientos registrados.</span>
+<thead>
 
-    </div>
+<tr>
+
+<th>Activo</th>
+
+<th>Movimiento</th>
+
+<th>Usuario</th>
+
+<th>Fecha</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+{% if movimientos %}
+
+{% for item in movimientos %}
+
+<tr>
+
+<td>{{ item.activo_rel.nombre }}</td>
+
+<td>{{ item.tipo }}</td>
+
+<td>{{ item.usuario }}</td>
+
+<td>{{ item.created_at.strftime("%d/%m/%Y") }}</td>
+
+</tr>
+
+{% endfor %}
+
+{% else %}
+
+<tr>
+
+<td colspan="4">
+
+No existen movimientos registrados.
+
+</td>
+
+</tr>
+
+{% endif %}
+
+</tbody>
+
+</table>
+
+</div>
+
+
+<div class="activity">
+
+<h2>
+
+<i class="bi bi-tools"></i>
+
+Equipos en mantenimiento
+
+</h2>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>Código</th>
+
+<th>Equipo</th>
+
+<th>Estado</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+{% if activos_mantenimiento %}
+
+{% for item in activos_mantenimiento %}
+
+<tr>
+
+<td>{{ item.codigo_barras }}</td>
+
+<td>{{ item.nombre }}</td>
+
+<td>
+
+<span class="badge-warning">
+
+En mantenimiento
+
+</span>
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+{% else %}
+
+<tr>
+
+<td colspan="3">
+
+No existen equipos en mantenimiento.
+
+</td>
+
+</tr>
+
+{% endif %}
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+
+
+<div class="activity">
+
+<h2>
+
+<i class="bi bi-lightning-charge-fill"></i>
+
+Acciones rápidas
+
+</h2>
+
+<div class="quick-buttons">
+
+<a href="/activos/crear" class="action-btn">
+
+<i class="bi bi-plus-circle"></i>
+
+Nuevo Activo
+
+</a>
+
+<a href="/personas" class="action-btn">
+
+<i class="bi bi-people-fill"></i>
+
+Personas
+
+</a>
+
+<a href="/categorias" class="action-btn">
+
+<i class="bi bi-tags-fill"></i>
+
+Categorías
+
+</a>
+
+<a href="/mantenimientos" class="action-btn">
+
+<i class="bi bi-tools"></i>
+
+Mantenimientos
+
+</a>
+
+<a href="/reportes" class="action-btn">
+
+<i class="bi bi-bar-chart-line-fill"></i>
+
+Reportes
+
+</a>
+
+<a href="/ubicaciones" class="action-btn">
+
+<i class="bi bi-geo-alt-fill"></i>
+
+Ubicaciones
+
+</a>
+
+</div>
 
 </div>
 

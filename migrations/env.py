@@ -9,6 +9,7 @@ from app.modules.categorias.model import *
 from app.modules.activos.model import *
 from app.modules.personas.model import *
 from app.modules.activos.movimiento_model import *
+from app.modules.mantenimientos.model import *
 
 from alembic import context
 

@@ -1,0 +1,130 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+<link rel="stylesheet" href="/static/css/mantenimientos.css">
+
+<div class="page-header">
+
+    <div>
+
+        <h1>Detalle del mantenimiento</h1>
+
+    </div>
+
+    <a
+        href="/mantenimientos"
+        class="btn-primary"
+    >
+
+        Volver
+
+    </a>
+
+</div>
+
+<div class="detalle-grid">
+
+    <div class="detalle-card">
+
+        <h3>Activo</h3>
+
+        <p>{{ mantenimiento.activo_rel.nombre }}</p>
+
+    </div>
+
+    <div class="detalle-card">
+
+        <h3>Código</h3>
+
+        <p>{{ mantenimiento.activo_rel.codigo_barras }}</p>
+
+    </div>
+
+    <div class="detalle-card">
+
+        <h3>Técnico</h3>
+
+        <p>{{ mantenimiento.tecnico }}</p>
+
+    </div>
+
+    <div class="detalle-card">
+
+        <h3>Empresa</h3>
+
+        <p>{{ mantenimiento.empresa }}</p>
+
+    </div>
+
+    <div class="detalle-card">
+
+        <h3>Ingreso</h3>
+
+        <p>{{ mantenimiento.fecha_ingreso }}</p>
+
+    </div>
+
+    <div class="detalle-card">
+
+        <h3>Salida</h3>
+
+        <p>{{ mantenimiento.fecha_salida or "-" }}</p>
+
+    </div>
+
+    <div class="detalle-card">
+
+        <h3>Estado</h3>
+
+        <p>{{ mantenimiento.estado }}</p>
+
+    </div>
+
+    <div class="detalle-card">
+
+        <h3>Costo</h3>
+
+        <p>$ {{ mantenimiento.costo or 0 }}</p>
+
+    </div>
+
+</div>
+
+<div class="card-panel">
+
+    <h3>Diagnóstico</h3>
+
+    <p>
+
+        {{ mantenimiento.diagnostico or "Sin información." }}
+
+    </p>
+
+</div>
+
+<div class="card-panel">
+
+    <h3>Solución aplicada</h3>
+
+    <p>
+
+        {{ mantenimiento.solucion or "Sin información." }}
+
+    </p>
+
+</div>
+
+<div class="card-panel">
+
+    <h3>Observaciones</h3>
+
+    <p>
+
+        {{ mantenimiento.observaciones or "Sin observaciones." }}
+
+    </p>
+
+</div>
+
+{% endblock %}

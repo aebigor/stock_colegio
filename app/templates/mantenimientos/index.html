@@ -1,0 +1,174 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+<link rel="stylesheet" href="/static/css/mantenimientos.css">
+
+<div class="page-header">
+
+    <div>
+
+        <h1>Mantenimientos</h1>
+
+        <p>
+            Consulta los equipos que se encuentran en mantenimiento.
+        </p>
+
+    </div>
+
+</div>
+
+<div class="stats-grid">
+
+    <div class="stat-card">
+
+        <i class="bi bi-tools"></i>
+
+        <h3>{{ activos }}</h3>
+
+        <span>En mantenimiento</span>
+
+    </div>
+
+    <div class="stat-card">
+
+        <i class="bi bi-check-circle"></i>
+
+        <h3>{{ finalizados }}</h3>
+
+        <span>Finalizados</span>
+
+    </div>
+
+    <div class="stat-card">
+
+        <i class="bi bi-pc-display"></i>
+
+        <h3>{{ mantenimientos|length }}</h3>
+
+        <span>Total registros</span>
+
+    </div>
+
+</div>
+
+<div class="card-panel">
+
+    <div class="table-header">
+
+        <input
+            id="buscar"
+            class="search-input"
+            placeholder="Buscar mantenimiento..."
+        >
+
+    </div>
+
+    <table id="tabla">
+
+        <thead>
+
+            <tr>
+
+                <th>Código</th>
+
+                <th>Activo</th>
+
+                <th>Técnico</th>
+
+                <th>Empresa</th>
+
+                <th>Ingreso</th>
+
+                <th>Estado</th>
+
+                <th></th>
+
+            </tr>
+
+        </thead>
+
+        <tbody>
+
+        {% for item in mantenimientos %}
+
+            <tr>
+
+                <td>
+
+                    {{ item.activo_rel.codigo_barras }}
+
+                </td>
+
+                <td>
+
+                    {{ item.activo_rel.nombre }}
+
+                </td>
+
+                <td>
+
+                    {{ item.tecnico or "-" }}
+
+                </td>
+
+                <td>
+
+                    {{ item.empresa or "-" }}
+
+                </td>
+
+                <td>
+
+                    {{ item.fecha_ingreso }}
+
+                </td>
+
+                <td>
+
+                    {% if item.estado=="En mantenimiento" %}
+
+                    <span class="badge-warning">
+
+                        En mantenimiento
+
+                    </span>
+
+                    {% else %}
+
+                    <span class="badge-success">
+
+                        Finalizado
+
+                    </span>
+
+                    {% endif %}
+
+                </td>
+
+                <td>
+
+                    <a
+                        class="btn-icon"
+                        href="/mantenimientos/{{ item.id }}"
+                    >
+
+                        <i class="bi bi-eye"></i>
+
+                    </a>
+
+                </td>
+
+            </tr>
+
+        {% endfor %}
+
+        </tbody>
+
+    </table>
+
+</div>
+
+<script src="/static/js/mantenimientos.js"></script>
+
+{% endblock %}
