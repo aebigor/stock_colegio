@@ -1,0 +1,299 @@
+{% extends "layouts/base.html" %}
+
+{% block content %}
+
+<link rel="stylesheet" href="/static/css/reportes.css">
+
+<div class="page-header">
+
+    <div>
+
+        <h1>Dashboard de Reportes</h1>
+
+        <p>
+            Estadísticas generales del inventario.
+        </p>
+
+    </div>
+
+    <div class="acciones-reportes">
+
+        <a href="/reportes/excel" class="btn-primary">
+
+            <i class="bi bi-file-earmark-excel"></i>
+
+            Inventario Excel
+
+        </a>
+
+        <a href="/mantenimientos" class="btn-primary">
+
+            <i class="bi bi-tools"></i>
+
+            Mantenimientos
+
+        </a>
+
+    </div>
+
+</div>
+
+<div class="stats-grid">
+
+    <div class="stat-card">
+
+        <i class="bi bi-pc-display"></i>
+
+        <h2>{{ total }}</h2>
+
+        <span>Total activos</span>
+
+    </div>
+
+    <div class="stat-card">
+
+        <i class="bi bi-check-circle-fill"></i>
+
+        <h2>{{ disponibles }}</h2>
+
+        <span>Disponibles</span>
+
+    </div>
+
+    <div class="stat-card">
+
+        <i class="bi bi-arrow-left-right"></i>
+
+        <h2>{{ prestados }}</h2>
+
+        <span>Prestados</span>
+
+    </div>
+
+    <div class="stat-card">
+
+        <i class="bi bi-tools"></i>
+
+        <h2>{{ mantenimiento }}</h2>
+
+        <span>En mantenimiento</span>
+
+    </div>
+
+    <div class="stat-card">
+
+        <i class="bi bi-trash3"></i>
+
+        <h2>{{ baja }}</h2>
+
+        <span>Dados de baja</span>
+
+    </div>
+
+</div>
+
+<div class="graficas-grid">
+
+    <div class="card-panel">
+
+        <div class="panel-header">
+
+            <h3>
+
+                Estado del inventario
+
+            </h3>
+
+        </div>
+
+        <canvas id="estadoChart"></canvas>
+
+    </div>
+
+    <div class="card-panel">
+
+        <div class="panel-header">
+
+            <h3>
+
+                Activos por categoría
+
+            </h3>
+
+        </div>
+
+        <canvas id="categoriaChart"></canvas>
+
+    </div>
+
+</div>
+
+<div class="dashboard-grid">
+
+    <div class="card-panel">
+
+        <div class="panel-header">
+
+            <h3>
+
+                Equipos en mantenimiento
+
+            </h3>
+
+        </div>
+
+        <table>
+
+            <thead>
+
+                <tr>
+
+                    <th>Código</th>
+
+                    <th>Equipo</th>
+
+                    <th>Estado</th>
+
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+            {% for activo in activos_mantenimiento %}
+
+                <tr>
+
+                    <td>{{ activo.codigo_barras }}</td>
+
+                    <td>{{ activo.nombre }}</td>
+
+                    <td>
+
+                        <span class="badge-warning">
+
+                            En mantenimiento
+
+                        </span>
+
+                    </td>
+
+                </tr>
+
+            {% else %}
+
+                <tr>
+
+                    <td colspan="3">
+
+                        <center>
+
+                            No existen equipos en mantenimiento.
+
+                        </center>
+
+                    </td>
+
+                </tr>
+
+            {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+    <div class="card-panel">
+
+        <div class="panel-header">
+
+            <h3>
+
+                Resumen por categoría
+
+            </h3>
+
+        </div>
+
+        <table>
+
+            <thead>
+
+                <tr>
+
+                    <th>Categoría</th>
+
+                    <th>Total</th>
+
+                </tr>
+
+            </thead>
+
+            <tbody>
+
+            {% for categoria in categorias %}
+
+                <tr>
+
+                    <td>{{ categoria[0] }}</td>
+
+                    <td>
+
+                        <strong>
+
+                            {{ categoria[1] }}
+
+                        </strong>
+
+                    </td>
+
+                </tr>
+
+            {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+<script>
+
+const estados={
+
+    disponibles:{{ disponibles }},
+
+    prestados:{{ prestados }},
+
+    mantenimiento:{{ mantenimiento }},
+
+    baja:{{ baja }}
+
+};
+
+const categorias=[
+
+{% for categoria in categorias %}
+
+{
+
+nombre:"{{ categoria[0] }}",
+
+cantidad:{{ categoria[1] }}
+
+},
+
+{% endfor %}
+
+];
+
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script src="/static/js/reportes.js"></script>
+
+{% endblock %}
