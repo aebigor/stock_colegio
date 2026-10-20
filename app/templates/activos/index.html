@@ -1,6 +1,10 @@
 {% extends "layouts/base.html" %}
-{% block content %}
+{% block extra_styles %}
 <link rel="stylesheet" href="/static/css/activos.css">
+{% endblock %}
+
+{% block content %}
+
 <div class="page-header">
   <div><h1>Inventario de activos</h1><p>Área consultada: <strong>{{ area_filtro }}</strong>. Las etiquetas incluyen todos los artículos registrados, también los que están en mantenimiento o dados de baja.</p></div>
   <div class="d-flex flex-wrap gap-2">
@@ -24,7 +28,7 @@
     <div class="col-lg-1 col-md-12 d-flex gap-2"><button class="btn btn-primary" type="submit" title="Aplicar filtros"><i class="bi bi-search"></i></button><a class="btn btn-outline-secondary" href="/activos" title="Limpiar filtros"><i class="bi bi-x-lg"></i></a></div>
   </form>
   <div class="table-responsive"><table class="table align-middle">
-    <thead><tr><th>Código / Serial</th><th>Artículo</th><th>Categoría</th><th>Ubicación</th><th>Área</th><th>Estado</th><th>Registro</th><th style="min-width:260px">Acciones</th></tr></thead>
+    <thead><tr><th>Código / Serial</th><th>Artículo</th><th>Categoría</th><th>Ubicación</th><th>Área</th><th>Estado</th><th>Registro</th><th style="min-width:220px">Acciones</th></tr></thead>
     <tbody>{% for activo in activos %}<tr>
       <td><strong>{{ activo.codigo_barras }}</strong><br><small>{{ activo.serial or 'Sin serial' }}</small><br><small>{{ activo.codigo }}</small></td>
       <td><strong>{{ activo.nombre }}</strong><br><small>{{ activo.marca or '' }} {{ activo.modelo or '' }}</small></td>
@@ -32,7 +36,6 @@
       <td>{% if activo.estado == 'Disponible' %}<span class="badge-success">Disponible</span>{% elif activo.estado == 'Prestado' %}<span class="badge-warning">Prestado</span>{% elif activo.estado == 'Mantenimiento' %}<span class="badge-info">Mantenimiento</span>{% else %}<span class="badge-danger">{{ activo.estado }}</span>{% endif %}</td>
       <td>{% if activo.activo %}<span class="badge-success">Activo</span>{% else %}<span class="badge-danger">Desactivado</span>{% endif %}</td>
       <td><div class="d-flex flex-wrap gap-1">
-        <a class="btn btn-sm btn-outline-secondary" href="/activos/{{ activo.id }}/detalle" title="Detalle"><i class="bi bi-eye"></i></a>
         <a class="btn btn-sm btn-outline-primary" href="/activos/{{ activo.id }}/editar" title="Editar"><i class="bi bi-pencil"></i></a>
         <a class="btn btn-sm btn-outline-secondary" href="/activos/{{ activo.id }}/barcode" title="Código de barras"><i class="bi bi-upc-scan"></i></a>
         <a class="btn btn-sm btn-outline-secondary" href="/activos/{{ activo.id }}/qr" title="QR"><i class="bi bi-qr-code"></i></a>

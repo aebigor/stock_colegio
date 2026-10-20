@@ -1,6 +1,8 @@
 {% extends "layouts/base.html" %}
-{% block content %}
+{% block extra_styles %}
 <link rel="stylesheet" href="/static/css/categorias.css">
+{% endblock %}
+{% block content %}
 <div class="page-header">
   <div><h1>Categorías</h1><p>Filtra y administra los tipos de activos del colegio.</p></div>
   <a href="/categorias/crear" class="btn-primary"><i class="bi bi-plus-circle"></i> Nueva categoría</a>

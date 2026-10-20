@@ -1,0 +1,58 @@
+{% extends "layouts/base.html" %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-buildings-fill" style="color:var(--cyan)"></i> Gestión de empresas</h1>
+    <p>Panel exclusivo del administrador principal. Cada empresa tiene sus usuarios e inventario aislados.</p>
+  </div>
+</div>
+{% if request.query_params.get('creada') == '1' %}
+<div class="alert alert-success" role="status"><i class="bi bi-check-circle-fill"></i> Operación completada: la empresa está registrada y su Super Admin fue creado.</div>
+{% endif %}
+<section class="card-panel mb-4">
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <div class="company-icon"><i class="bi bi-person-plus-fill"></i></div>
+    <div><h2 class="h4 mb-1">Crear empresa y Super Admin</h2><p class="mb-0">Registra al responsable y crea automáticamente su acceso independiente.</p><p class="mb-0 mt-1">Si una empresa ya aparece en la tabla y aún no tiene Super Admin, escribe su nombre exacto para asignárselo sin mover sus activos.</p></div>
+  </div>
+  <form method="post" action="/empresas/crear" class="company-form">
+    <div class="row g-3">
+      <div class="col-md-6"><label for="nombre_persona" class="form-label">Nombre completo de la persona</label><input id="nombre_persona" class="form-control" name="nombre_persona" maxlength="180" autocomplete="name" placeholder="Ej. Laura Martínez Gómez" required></div>
+      <div class="col-md-6"><label for="correo" class="form-label">Correo electrónico de acceso</label><input id="correo" class="form-control" name="correo" type="email" maxlength="180" autocomplete="email" placeholder="laura@instituto.edu.co" required></div>
+      <div class="col-md-6"><label for="nombre_empresa" class="form-label">Nombre del instituto o empresa</label><input id="nombre_empresa" class="form-control" name="nombre_empresa" maxlength="180" placeholder="Ej. Instituto Central" required></div>
+      <div class="col-md-6"><label for="password" class="form-label">Contraseña inicial</label><input id="password" class="form-control" name="password" type="password" minlength="10" autocomplete="new-password" placeholder="Mínimo 10 caracteres" required><small class="form-text">El Super Admin puede cambiarla después de iniciar sesión.</small></div>
+    </div>
+    <div class="form-footer mt-4"><button type="submit" class="btn btn-primary"><i class="bi bi-shield-lock-fill"></i> Crear empresa y Super Admin</button></div>
+  </form>
+</section>
+<section class="card-panel">
+  <div class="d-flex justify-content-between align-items-center gap-3 mb-3 flex-wrap">
+    <div><h2 class="h4 mb-1">Empresas registradas</h2><p class="mb-0">{{ empresas|length }} empresa(s) en la plataforma.</p></div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead><tr><th>Empresa / instituto</th><th>Responsable</th><th>Correo de contacto</th><th>Registro</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <tbody>
+      {% for empresa in empresas %}
+        {% set admin = admin_por_empresa.get(empresa.id) %}
+        <tr>
+          <td><strong>{{ empresa.nombre }}</strong><br><small>ID de empresa: {{ empresa.id }}</small></td>
+          <td>{% if admin %}{{ admin.nombre }} {{ admin.apellido }}{% else %}Sin Super Admin asignado{% endif %}</td>
+          <td>{{ empresa.correo_contacto }}</td>
+          <td>{{ empresa.created_at.strftime('%d/%m/%Y') if empresa.created_at else '—' }}</td>
+          <td>{% if empresa.estado %}<span class="badge-success">Activa</span>{% else %}<span class="badge-danger">Suspendida</span>{% endif %}</td>
+          <td class="d-flex gap-2 flex-wrap">
+            <a href="/empresas/{{ empresa.id }}/superadmin" class="btn btn-sm btn-outline-info"><i class="bi bi-person-gear"></i> {% if admin %}Editar Super Admin{% else %}Asignar Super Admin{% endif %}</a>
+            <form method="post" action="/empresas/{{ empresa.id }}/estado" onsubmit="return confirm('¿Deseas cambiar el estado de esta empresa?');"><button type="submit" class="btn btn-sm {% if empresa.estado %}btn-outline-danger{% else %}btn-outline-success{% endif %}">{% if empresa.estado %}<i class="bi bi-pause-circle"></i> Suspender{% else %}<i class="bi bi-play-circle"></i> Activar{% endif %}</button></form>
+          </td>
+        </tr>
+      {% else %}<tr><td colspan="6" class="text-center py-4">Todavía no hay empresas registradas.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+<style>
+.company-icon {width:48px;height:48px;display:grid;place-items:center;border:1px solid rgba(0,229,255,.4);border-radius:14px;background:rgba(0,229,255,.1);color:var(--cyan);font-size:1.35rem;flex:0 0 auto}
+.form-footer {border-top:1px solid var(--border);padding-top:18px}
+.company-form .form-text {display:block;margin-top:7px}
+</style>
+{% endblock %}

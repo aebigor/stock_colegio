@@ -13,9 +13,10 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
+from app.core.tenancy import TenantScoped
 
 
-class Mantenimiento(Base):
+class Mantenimiento(TenantScoped, Base):
 
     __tablename__ = "mantenimientos"
 

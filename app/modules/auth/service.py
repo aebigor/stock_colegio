@@ -13,6 +13,8 @@ class AuthService:
         user = self.repository.get_user(usuario)
         if not user or not user.estado:
             return None, None
+        if user.empresa_id is not None and (user.empresa is None or not user.empresa.estado):
+            return None, None
         if not verify_password(password, user.password):
             return None, None
 

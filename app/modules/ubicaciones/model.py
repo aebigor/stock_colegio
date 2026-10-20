@@ -9,12 +9,13 @@ from sqlalchemy import (
 )
 
 from app.core.database import Base
+from app.core.tenancy import TenantScoped
 
 
-class Ubicacion(Base):
+class Ubicacion(TenantScoped, Base):
 
     __tablename__ = "ubicaciones"
-    __table_args__ = (UniqueConstraint("area", "codigo", name="uq_ubicaciones_area_codigo"),)
+    __table_args__ = (UniqueConstraint("empresa_id", "area", "codigo", name="uq_ubicaciones_empresa_area_codigo"),)
 
     id = Column(
         Integer,

@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     INITIAL_ADMIN_PASSWORD: str = "CambiarAdmin2026!"
     INITIAL_BADER_PASSWORD: str = "CambiarBader2026!"
+    PLATFORM_ADMIN_EMAIL: str = "tecnologia@gimsau.edu.co"
     # URL pública/base para que los QR abran el sistema desde otro dispositivo.
     PUBLIC_BASE_URL: str = ""
 

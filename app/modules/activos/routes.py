@@ -281,7 +281,7 @@ def guardar_movimiento(
     db: Session = Depends(get_db),
     user: Usuario = Depends(get_current_user),
 ):
-    estados = {"Entrega": "Prestado", "Mantenimiento": "Mantenimiento", "Baja": "Baja", "Devolución": "Disponible", "Devolucion": "Disponible", "Ajuste": "Disponible"}
+    estados = {"Entrega": "Prestado", "Mantenimiento": "Mantenimiento", "Baja": "Baja", "Devolución": "Disponible", "Devolucion": "Disponible", "Ajuste": "Disponible", "Disponible": "Disponible", "Ingreso a bodega": "Disponible", "Salida Mantenimiento": "Disponible"}
     if tipo not in estados:
         raise HTTPException(status_code=400, detail="Tipo de movimiento no válido.")
     if ActivoService(db).obtener(activo_id, user_area(user)) is None:

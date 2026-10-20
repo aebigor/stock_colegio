@@ -4,6 +4,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    UniqueConstraint,
     Integer,
     String,
     Text,
@@ -13,9 +14,10 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
+from app.core.tenancy import TenantScoped
 
 
-class Activo(Base):
+class Activo(TenantScoped, Base):
 
     __tablename__ = "activos"
 
@@ -25,28 +27,29 @@ class Activo(Base):
         index=True
     )
 
+    __table_args__ = (
+        UniqueConstraint("empresa_id", "codigo", name="uq_activos_empresa_codigo"),
+        UniqueConstraint("empresa_id", "codigo_barras", name="uq_activos_empresa_codigo_barras"),
+        UniqueConstraint("empresa_id", "serial", name="uq_activos_empresa_serial"),
+    )
+
     # Código interno
     # Ej: PC000001
     codigo = Column(
         String(30),
-        unique=True,
         nullable=False,
-        index=True
     )
 
     # Código físico del colegio
     # Ej: TEC-GLS-000001
     codigo_barras = Column(
         String(40),
-        unique=True,
         nullable=False,
-        index=True
     )
 
     # Se diligencia después
     serial = Column(
         String(150),
-        unique=True,
         nullable=True
     )
 

@@ -1,0 +1,80 @@
+{% extends "layouts/base.html" %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-gear-wide-connected" style="color:var(--cyan)"></i> Configuraciones</h1>
+    <p>Cambia tu nombre, el usuario con el que inicias sesión y la contraseña de la cuenta principal.</p>
+  </div>
+  <a class="btn btn-outline-secondary" href="/empresas"><i class="bi bi-arrow-left"></i> Volver a empresas</a>
+</div>
+{% if request.query_params.get('guardado') == '1' %}
+<div class="alert alert-success" role="status"><i class="bi bi-check-circle-fill"></i> Tus datos de acceso se guardaron correctamente.</div>
+{% endif %}
+{% set form_error = request.query_params.get('error') %}
+{% if form_error %}
+<div class="alert alert-danger" role="alert">
+  {% if form_error == 'nombre' %}Escribe un nombre y apellido válidos (máximo 100 caracteres cada uno).
+  {% elif form_error == 'usuario_formato' %}El usuario debe tener entre 3 y 50 caracteres; usa letras, números, punto, guion o guion bajo.
+  {% elif form_error == 'usuario_ocupado' %}Ese nombre de usuario ya está ocupado. Elige otro.
+  {% elif form_error == 'password_actual' %}La contraseña actual no coincide.
+  {% elif form_error == 'password_corta' %}La nueva contraseña debe tener al menos 10 caracteres.
+  {% elif form_error == 'password_confirmacion' %}La confirmación no coincide con la nueva contraseña.
+  {% elif form_error == 'password_igual' %}La nueva contraseña debe ser diferente de la actual.
+  {% else %}No se pudieron guardar los cambios. Verifica los datos e inténtalo otra vez.{% endif %}
+</div>
+{% endif %}
+<section class="card-panel">
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <div class="company-icon"><i class="bi bi-shield-lock-fill"></i></div>
+    <div>
+      <h2 class="h4 mb-1">Seguridad de la cuenta de plataforma</h2>
+      <p class="mb-0">Solo el administrador principal puede modificar estos datos. Debes confirmar tu contraseña actual para guardar cambios.</p>
+    </div>
+  </div>
+  <form method="post" action="/empresas/configuracion/guardar-acceso" class="company-form">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label for="nombre" class="form-label">Nombre</label>
+        <input id="nombre" name="nombre" class="form-control" maxlength="100" autocomplete="given-name" required value="{{ actor.nombre }}">
+      </div>
+      <div class="col-md-6">
+        <label for="apellido" class="form-label">Apellido</label>
+        <input id="apellido" name="apellido" class="form-control" maxlength="100" autocomplete="family-name" required value="{{ actor.apellido }}">
+      </div>
+      <div class="col-md-6">
+        <label for="usuario_login" class="form-label">Usuario de acceso (puedes cambiarlo)</label>
+        <input id="usuario_login" name="usuario_login" class="form-control" maxlength="50" pattern="[A-Za-z0-9_.-]{3,50}" autocomplete="username" required value="{{ actor.usuario }}">
+        <small class="form-text">Después de guardar, puedes iniciar sesión con este usuario nuevo o con el correo de plataforma que aparece abajo.</small>
+      </div>
+      <div class="col-md-6">
+        <label for="correo" class="form-label">Correo de la cuenta de plataforma</label>
+        <input id="correo" class="form-control" value="{{ actor.correo }}" readonly aria-readonly="true">
+        <small class="form-text">Este correo identifica de forma segura la cuenta propietaria de la plataforma y no se cambia desde aquí.</small>
+      </div>
+      <div class="col-12"><hr><h3 class="h5">Cambiar contraseña (opcional)</h3><p class="mb-0">Deja los dos campos nuevos vacíos si solo deseas cambiar tu nombre o usuario.</p></div>
+      <div class="col-md-4">
+        <label for="password_actual" class="form-label">Contraseña actual</label>
+        <input id="password_actual" name="password_actual" type="password" class="form-control" autocomplete="current-password" required>
+      </div>
+      <div class="col-md-4">
+        <label for="password_nueva" class="form-label">Nueva contraseña</label>
+        <input id="password_nueva" name="password_nueva" type="password" class="form-control" minlength="10" autocomplete="new-password">
+        <small class="form-text">Mínimo 10 caracteres.</small>
+      </div>
+      <div class="col-md-4">
+        <label for="confirmar_password" class="form-label">Confirmar nueva contraseña</label>
+        <input id="confirmar_password" name="confirmar_password" type="password" class="form-control" minlength="10" autocomplete="new-password">
+      </div>
+    </div>
+    <div class="form-footer mt-4 d-flex gap-2 flex-wrap">
+      <button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Guardar mis datos</button>
+      <a class="btn btn-outline-secondary" href="/empresas">Cancelar</a>
+    </div>
+  </form>
+</section>
+<style>
+.company-icon {width:48px;height:48px;display:grid;place-items:center;border:1px solid rgba(0,229,255,.4);border-radius:14px;background:rgba(0,229,255,.1);color:var(--cyan);font-size:1.35rem;flex:0 0 auto}
+.form-footer {border-top:1px solid var(--border);padding-top:18px}
+.company-form .form-text {display:block;margin-top:7px}
+</style>
+{% endblock %}

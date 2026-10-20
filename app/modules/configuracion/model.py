@@ -8,9 +8,10 @@ from sqlalchemy import (
 )
 
 from app.core.database import Base
+from app.core.tenancy import TenantScoped
 
 
-class Configuracion(Base):
+class Configuracion(TenantScoped, Base):
 
     __tablename__ = "configuracion"
 

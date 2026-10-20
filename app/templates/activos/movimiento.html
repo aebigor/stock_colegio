@@ -1,8 +1,10 @@
 {% extends "layouts/base.html" %}
+{% block extra_styles %}
+<link rel="stylesheet" href="/static/css/movimientos.css">
+{% endblock %}
 
 {% block content %}
 
-<link rel="stylesheet" href="/static/css/movimientos.css">
 
 <div class="page-header">
 
@@ -161,6 +163,12 @@
 
                 </option>
 
+                <option value="Disponible">
+
+                    Disponible (se deja en bodega)
+
+                </option>
+
                 <option value="Baja">
 
                     Baja
@@ -175,7 +183,7 @@
 
             <label>
 
-                Responsable
+                Responsable / encargado de bodega
 
             </label>
 
@@ -214,7 +222,7 @@
             </label>
 
             <select
-                name="ubicacion_destino_id"
+                name="ubicacion_id"
             >
 
                 <option value="">
@@ -237,46 +245,7 @@
 
         </div>
 
-        <div class="form-group">
 
-            <label>
-
-                Estado del Activo
-
-            </label>
-
-            <select
-                name="estado_nuevo"
-                required
-            >
-
-                <option>
-
-                    Excelente
-
-                </option>
-
-                <option>
-
-                    Bueno
-
-                </option>
-
-                <option>
-
-                    Regular
-
-                </option>
-
-                <option>
-
-                    Malo
-
-                </option>
-
-            </select>
-
-        </div>
 
     </div>
 
@@ -386,7 +355,7 @@
 
     <h3 class="section-title">
 
-        Firma del Responsable
+        Firma del Responsable / encargado de bodega
 
     </h3>
 

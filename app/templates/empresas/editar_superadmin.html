@@ -1,0 +1,54 @@
+{% extends "layouts/base.html" %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i class="bi bi-person-gear" style="color:var(--cyan)"></i> {% if superadmin %}Editar Super Admin{% else %}Recuperar acceso Super Admin{% endif %}</h1>
+    <p>Empresa: <strong>{{ empresa.nombre }}</strong> · ID {{ empresa.id }}</p>
+  </div>
+  <a class="btn btn-outline-secondary" href="/empresas"><i class="bi bi-arrow-left"></i> Volver a empresas</a>
+</div>
+{% if request.query_params.get('guardado') == '1' %}
+<div class="alert alert-success" role="status"><i class="bi bi-check-circle-fill"></i> Los datos del Super Admin se guardaron correctamente. Los usuarios y el inventario existentes se conservaron.</div>
+{% endif %}
+{% if request.query_params.get('error') %}
+{% set form_error = request.query_params.get('error') %}
+<div class="alert alert-danger" role="alert">
+  {% if form_error == 'nombre' %}Escribe el nombre completo de la persona.
+  {% elif form_error == 'correo' %}Escribe un correo válido de máximo 150 caracteres.
+  {% elif form_error == 'usuario_formato' %}El usuario debe tener entre 3 y 50 caracteres; usa letras, números, punto, guion o guion bajo.
+  {% elif form_error == 'password' %}La contraseña debe tener al menos 10 caracteres.
+  {% elif form_error == 'password_requerida' %}Define una contraseña inicial de al menos 10 caracteres para recuperar el acceso.
+  {% elif form_error == 'correo_ocupado' %}Ese correo ya pertenece a otra cuenta.
+  {% elif form_error == 'usuario_ocupado' %}Ese nombre de usuario ya está ocupado.
+  {% elif form_error == 'duplicado' %}No se pudieron guardar los cambios porque el correo o el usuario ya están en uso.
+  {% else %}No se pudieron guardar los datos; verifica la información e inténtalo de nuevo.{% endif %}
+</div>
+{% endif %}
+<section class="card-panel">
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <div class="company-icon"><i class="bi bi-shield-lock-fill"></i></div>
+    <div>
+      <h2 class="h4 mb-1">Credenciales de acceso</h2>
+      {% if superadmin %}
+      <p class="mb-0">Edita nombre, correo o usuario. Deja la contraseña vacía para conservar la actual.</p>
+      {% else %}
+      <p class="mb-0">Esta empresa no tiene actualmente un Super Admin. Aquí puedes crear su acceso sin borrar los usuarios existentes ni modificar los activos.</p>
+      {% endif %}
+    </div>
+  </div>
+  <form method="post" action="/empresas/{{ empresa.id }}/superadmin/guardar" class="company-form">
+    <div class="row g-3">
+      <div class="col-md-6"><label for="nombre_persona" class="form-label">Nombre completo</label><input id="nombre_persona" name="nombre_persona" class="form-control" maxlength="180" autocomplete="name" required value="{{ (superadmin.nombre ~ ' ' ~ superadmin.apellido) if superadmin else '' }}" placeholder="Nombre del responsable"></div>
+      <div class="col-md-6"><label for="correo" class="form-label">Correo electrónico</label><input id="correo" name="correo" type="email" class="form-control" maxlength="150" autocomplete="email" required value="{{ superadmin.correo if superadmin else '' }}" placeholder="administrador@empresa.com"></div>
+      <div class="col-md-6"><label for="usuario_login" class="form-label">Usuario para iniciar sesión</label><input id="usuario_login" name="usuario_login" class="form-control" maxlength="50" pattern="[A-Za-z0-9_.-]{3,50}" autocomplete="username" required value="{{ superadmin.usuario if superadmin else '' }}" placeholder="superadmin"></div>
+      <div class="col-md-6"><label for="password" class="form-label">{% if superadmin %}Nueva contraseña (opcional){% else %}Contraseña inicial{% endif %}</label><input id="password" name="password" type="password" class="form-control" minlength="10" autocomplete="new-password" {% if not superadmin %}required{% endif %} placeholder="Mínimo 10 caracteres"><small class="form-text">{% if superadmin %}Déjala vacía si no necesitas cambiarla.{% else %}Debe tener al menos 10 caracteres. No se modifica la contraseña de ningún otro usuario.{% endif %}</small></div>
+    </div>
+    <div class="form-footer mt-4 d-flex gap-2 flex-wrap"><button type="submit" class="btn btn-primary"><i class="bi bi-save"></i> Guardar Super Admin</button><a class="btn btn-outline-secondary" href="/empresas">Cancelar</a></div>
+  </form>
+</section>
+<style>
+.company-icon {width:48px;height:48px;display:grid;place-items:center;border:1px solid rgba(0,229,255,.4);border-radius:14px;background:rgba(0,229,255,.1);color:var(--cyan);font-size:1.35rem;flex:0 0 auto}
+.form-footer {border-top:1px solid var(--border);padding-top:18px}
+.company-form .form-text {display:block;margin-top:7px}
+</style>
+{% endblock %}

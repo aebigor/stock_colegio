@@ -1,4 +1,5 @@
-from sqlalchemy.orm import Session
+from sqlalchemy import or_
+from sqlalchemy.orm import Session, joinedload
 
 from .models import Usuario
 
@@ -11,6 +12,7 @@ class AuthRepository:
 
     def get_user(self, usuario: str):
 
-        return self.db.query(Usuario).filter(
-            Usuario.usuario == usuario
+        value = usuario.strip()
+        return self.db.query(Usuario).options(joinedload(Usuario.empresa), joinedload(Usuario.rol)).filter(
+            or_(Usuario.usuario == value, Usuario.correo.ilike(value))
         ).first()

@@ -122,9 +122,12 @@ class ActivoService:
         if activo is None:
             return None
 
+        categoria_nueva = self.db.query(Categoria).filter(Categoria.id == datos.categoria_id).first()
+        if categoria_nueva is None:
+            raise ValueError("La categoría seleccionada no existe en tu empresa.")
         ubicacion_nueva = self.db.query(Ubicacion).filter(Ubicacion.id == datos.ubicacion_id).first()
         if ubicacion_nueva is None:
-            raise ValueError("La ubicación seleccionada no existe.")
+            raise ValueError("La ubicación seleccionada no existe en tu empresa.")
         if ubicacion_nueva.area != datos.area:
             raise ValueError("La bodega seleccionada debe pertenecer al área del inventario del artículo.")
 

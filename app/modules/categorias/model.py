@@ -9,18 +9,25 @@ from sqlalchemy import (
 )
 
 from app.core.database import Base
+from app.core.tenancy import TenantScoped
 from sqlalchemy.orm import relationship
+from sqlalchemy import UniqueConstraint
 
 
-class Categoria(Base):
+class Categoria(TenantScoped, Base):
 
     __tablename__ = "categorias"
 
+    __table_args__ = (
+        UniqueConstraint("empresa_id", "nombre", name="uq_categorias_empresa_nombre"),
+        UniqueConstraint("empresa_id", "prefijo", name="uq_categorias_empresa_prefijo"),
+    )
+
     id = Column(Integer, primary_key=True, index=True)
 
-    nombre = Column(String(120), unique=True, nullable=False)
+    nombre = Column(String(120), nullable=False)
 
-    prefijo = Column(String(10), unique=True, nullable=False)
+    prefijo = Column(String(10), nullable=False)
 
     descripcion = Column(Text)
 

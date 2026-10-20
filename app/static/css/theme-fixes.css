@@ -1,0 +1,201 @@
+/* Tema oscuro GIMSAU: fondo azul noche, acento aguamarina y contraste coherente. */
+:root {
+  color-scheme: dark;
+  --background: #050816;
+  --sidebar: #0B1120;
+  --navbar: #101827;
+  --card: #111827;
+  --card-hover: #172033;
+  --border: #293548;
+  --text: #F8FAFC;
+  --text-secondary: #C0CCDA;
+  --text2: #C0CCDA;
+  --cyan: #00E5FF;
+  --cyan-strong: #00BCD4;
+  --purple: #A78BFA;
+  --green: #4ADE80;
+  --orange: #FBBF24;
+  --red: #F87171;
+  --shadow: 0 0 25px rgba(0,229,255,.12);
+  --radius: 16px;
+}
+
+html, body { min-height: 100%; background: var(--background) !important; color: var(--text) !important; }
+body { font-family: Inter, "Segoe UI", Arial, sans-serif; }
+.wrapper, .content, .page-content { background: var(--background) !important; color: var(--text) !important; }
+.page-content { min-width: 0; }
+.sidebar { background: linear-gradient(180deg, #0B1120 0%, #0A1324 100%) !important; color: #F8FAFC !important; border-right: 1px solid var(--border); }
+.sidebar .logo h5, .sidebar .logo small, .sidebar .menu-title, .sidebar .menu-link, .sidebar .logout a { color: #F8FAFC !important; }
+.sidebar .menu-title { color: #B8C5D6 !important; opacity: 1; }
+.sidebar .menu-link { border: 1px solid transparent; }
+.sidebar .menu-link:hover, .sidebar .menu-link.active { background: rgba(0,229,255,.11) !important; color: #FFFFFF !important; }
+.sidebar .menu-link.active { border-left: 3px solid var(--cyan); }
+.sidebar .menu-link i, .logo i { color: var(--cyan) !important; }
+.content { min-width: 0; }
+.topbar { min-height: 70px; background: var(--navbar) !important; color: var(--text) !important; border-bottom: 1px solid var(--border); box-shadow: 0 5px 22px rgba(0,0,0,.18); }
+.topbar small, .topbar strong, .user-info, #toggleSidebar { color: var(--text) !important; }
+#toggleSidebar { background: transparent; }
+.page-header h1, h1, h2, h3, h4, h5, h6, .card-title, .modal-title { color: var(--text) !important; }
+.page-header p, .text-muted, small, .form-text, .help-text, .form-label, label { color: var(--text-secondary) !important; }
+.card, .card-body, .card-panel, .form-card, .modal-content, .dropdown-menu, .list-group-item, .accordion-item,
+.bg-white, .bg-light { background: var(--card) !important; color: var(--text) !important; border-color: var(--border) !important; }
+.card-header, .card-footer, .accordion-button { background: #172033 !important; color: var(--text) !important; border-color: var(--border) !important; }
+.card-panel, .form-card { border: 1px solid var(--border) !important; border-radius: var(--radius); box-shadow: var(--shadow); }
+hr { border-color: var(--border) !important; opacity: 1; }
+
+/* Inputs: fondo oscuro y texto claro, incluyendo selectores nativos y Bootstrap. */
+input:not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea,
+.form-control, .form-select, .form-group input, .form-group select, .form-group textarea,
+.input-group-text { background-color: #0B1220 !important; color: #F8FAFC !important; border: 1px solid #3A4B61 !important; border-radius: 9px; }
+input[type=checkbox], input[type=radio] { accent-color: var(--cyan-strong); }
+input::placeholder, textarea::placeholder, .form-control::placeholder { color: #A9B7C8 !important; opacity: 1 !important; }
+select option { background: #0B1220; color: #F8FAFC; }
+input:focus, select:focus, textarea:focus, .form-control:focus, .form-select:focus {
+  color: #FFFFFF !important; border-color: var(--cyan) !important; box-shadow: 0 0 0 .2rem rgba(0,229,255,.16) !important; outline: none;
+}
+input:disabled, select:disabled, textarea:disabled, .form-control:disabled { background: #182235 !important; color: #AAB7C7 !important; }
+
+/* Tablas completamente oscuras: el texto no desaparece en celdas claras heredadas. */
+table, .table, .table-responsive { --bs-table-color: #F8FAFC; --bs-table-bg: #111827; --bs-table-border-color: #293548;
+  --bs-table-striped-bg: #151F30; --bs-table-striped-color: #F8FAFC;
+  --bs-table-hover-bg: #1B2A3D; --bs-table-hover-color: #FFFFFF;
+  color: #F8FAFC !important; background: #111827 !important; border-color: #293548 !important;
+}
+.table > :not(caption) > * > *, table > thead > tr > th, table > tbody > tr > td,
+thead th, tbody td, tbody th, td, th {
+  background-color: #111827 !important; color: #F8FAFC !important; border-color: #293548 !important;
+  box-shadow: none !important; vertical-align: middle;
+}
+.table thead th, thead th, .table-light th, .table-light td, thead.table-light th {
+  background: #1B2A3D !important; color: #FFFFFF !important; font-weight: 750;
+}
+.table-striped > tbody > tr:nth-of-type(odd) > *, .table-striped tbody tr:nth-child(odd) td { background: #151F30 !important; color: #F8FAFC !important; }
+.table-hover > tbody > tr:hover > *, .table tbody tr:hover td { background: #1B2A3D !important; color: #FFFFFF !important; }
+.table a, table a { color: #67F0FF !important; }
+
+/* Botones. El texto de botones aguamarina es azul noche para mantener contraste. */
+.btn, button, .btn-primary, .btn-secondary, .btn-outline-primary, .btn-outline-secondary { border-radius: 9px; font-weight: 700; transition: all .18s ease; }
+.btn-primary, button.btn-primary, .btn-primary:not(:disabled), button[type=submit].btn-primary {
+  background: var(--cyan) !important; border: 1px solid var(--cyan) !important; color: #04212B !important;
+  padding: 10px 17px; box-shadow: 0 3px 12px rgba(0,229,255,.16);
+}
+.btn-primary:hover, button.btn-primary:hover { background: #72F2FF !important; border-color: #72F2FF !important; color: #031720 !important; transform: translateY(-1px); }
+.btn-secondary, .btn-outline-secondary { color: #F8FAFC !important; background: #202B3D !important; border: 1px solid #53647A !important; padding: 9px 15px; }
+.btn-secondary:hover, .btn-outline-secondary:hover { background: #2C3D54 !important; color: #FFFFFF !important; }
+.btn-outline-primary { color: #67F0FF !important; background: transparent !important; border: 1px solid #00BCD4 !important; }
+.btn-outline-primary:hover { background: rgba(0,229,255,.15) !important; color: #FFFFFF !important; }
+.btn-danger, .btn-outline-danger { color: #FFFFFF !important; }
+.btn-danger { background: #B42335 !important; border-color: #B42335 !important; }
+.btn-success { background: #16804A !important; color: #FFFFFF !important; border-color: #16804A !important; }
+.btn-warning { background: #FBBF24 !important; color: #241704 !important; border-color: #FBBF24 !important; }
+.btn-info { background: #0891B2 !important; color: #FFFFFF !important; border-color: #0891B2 !important; }
+.btn-link { color: #67F0FF !important; }
+.btn:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--cyan) !important; outline-offset: 2px; }
+
+/* Texto heredado que Bootstrap pintaba oscuro sobre superficies oscuras. */
+.text-dark, .text-body, .link-dark, .dropdown-item, .list-group-item, .modal-body, .modal-footer { color: #F8FAFC !important; }
+.text-secondary { color: #C0CCDA !important; }
+.badge-success { background: #14532D !important; color: #BBF7D0 !important; }
+.badge-danger { background: #7F1D1D !important; color: #FECACA !important; }
+.badge-warning { background: #713F12 !important; color: #FEF3C7 !important; }
+.badge-info { background: #164E63 !important; color: #CFFAFE !important; }
+.alert-success { background: #102E21 !important; border-color: #166534 !important; color: #BBF7D0 !important; }
+.alert-danger { background: #3A1118 !important; border-color: #991B1B !important; color: #FECACA !important; }
+.alert-warning { background: #38270D !important; border-color: #92400E !important; color: #FEF3C7 !important; }
+.alert-info { background: #0C2F3A !important; border-color: #155E75 !important; color: #CFFAFE !important; }
+.page-header .btn-primary, .page-header a.btn-primary { text-decoration: none; }
+
+@media (max-width: 768px) {
+  .page-content { padding: 16px !important; }
+  .card-panel, .form-card { padding: 16px !important; }
+  .topbar { padding: 0 15px; }
+  .table-responsive { overflow-x: auto; }
+}
+
+/* Tarjeta de acceso, que utiliza un layout separado del panel principal. */
+.login-container { background: var(--background) !important; color: var(--text) !important; }
+.login-card { background: var(--card) !important; color: var(--text) !important; border: 1px solid var(--border) !important; box-shadow: var(--shadow) !important; }
+.login-card h1, .login-card h2, .login-card label { color: var(--text) !important; }
+.login-card input { background: #0B1220 !important; color: #F8FAFC !important; border-color: #3A4B61 !important; }
+.login-card input::placeholder { color: #A9B7C8 !important; }
+.login-card button { background: var(--cyan) !important; color: #04212B !important; font-weight: 800; }
+
+
+/* Elementos claros heredados conservan legibilidad dentro del tema oscuro. */
+.btn-light, .btn-light:disabled, .btn-light[disabled] {
+  background: #263449 !important; border-color: #52627A !important; color: #F8FAFC !important;
+}
+.btn-light:hover { background: #34465F !important; color: #FFFFFF !important; }
+.bg-white *, .bg-light *, .table-light *, .text-bg-light { color: #F8FAFC !important; }
+.table-light, .table-light > :not(caption) > * > * { --bs-table-color: #FFFFFF; --bs-table-bg: #1B2A3D; color: #FFFFFF !important; background-color: #1B2A3D !important; }
+.form-check-input { background-color: #0B1220 !important; border-color: #6B7C90 !important; }
+.form-check-input:checked { background-color: var(--cyan-strong) !important; border-color: var(--cyan-strong) !important; }
+::selection { background: rgba(0,229,255,.34); color: #FFFFFF; }
+
+/* Mantener texto oscuro únicamente en botones con relleno aguamarina o amarillo. */
+.btn-primary, .btn-primary *, .btn-info, .btn-info * { color: #04212B !important; }
+.btn-warning, .btn-warning * { color: #241704 !important; }
+.btn-danger, .btn-danger *, .btn-success, .btn-success * { color: #FFFFFF !important; }
+
+/* Ajuste de contraste contextual: el tema general sigue siendo oscuro.
+   Las tablas o celdas que deliberadamente usan fondo blanco deben usar texto oscuro. */
+.table.bg-white,
+table.bg-white,
+.bg-white table,
+.table-white,
+.table-white > :not(caption) > * > *,
+.table-light,
+.table-light > :not(caption) > * > *,
+.table-light th,
+.table-light td,
+.table .bg-white,
+.table-responsive .bg-white,
+.table td.bg-white,
+.table th.bg-white,
+td[style*="background-color: white"],
+th[style*="background-color: white"],
+td[style*="background-color:#fff"],
+th[style*="background-color:#fff"] {
+  background-color: #FFFFFF !important;
+  color: #172033 !important;
+  --bs-table-color: #172033;
+  --bs-table-bg: #FFFFFF;
+}
+.table.bg-white a,
+table.bg-white a,
+.bg-white table a,
+.table-white a,
+.table-light a,
+.table .bg-white a,
+td.bg-white a,
+th.bg-white a {
+  color: #075985 !important;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.table.bg-white small,
+table.bg-white small,
+.bg-white table small,
+.table-white small,
+.table-light small,
+.table .bg-white small,
+td.bg-white small,
+th.bg-white small {
+  color: #475569 !important;
+}
+/* Los estados mantienen colores legibles sin importar la superficie de la tabla. */
+.table .badge-success, .table .badge-danger, .table .badge-warning, .table .badge-info,
+.table .badge, table .badge-success, table .badge-danger, table .badge-warning, table .badge-info {
+  font-weight: 700;
+  border: 1px solid rgba(148,163,184,.25);
+}
+/* Texto secundario nunca debe quedar casi invisible sobre el fondo oscuro. */
+.text-muted, .form-text, .help-text, .page-header p, .card-panel p, .form-card p {
+  color: #C0CCDA !important;
+}
+/* Controles de registro y botones de acciones con contraste consistente. */
+.btn:not(.btn-link), button:not(#toggleSidebar) { font-weight: 700; }
+.btn-outline-danger { color: #FCA5A5 !important; border-color: #F87171 !important; background: transparent !important; }
+.btn-outline-danger:hover { color: #FFFFFF !important; background: #991B1B !important; }
+.btn-outline-success { color: #86EFAC !important; border-color: #4ADE80 !important; background: transparent !important; }
+.btn-outline-success:hover { color: #052E16 !important; background: #86EFAC !important; }

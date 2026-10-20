@@ -15,12 +15,13 @@ router = APIRouter(
 )
 
 
-def _roles_disponibles(db: Session):
+def _roles_disponibles(db: Session, incluir_super_admin: bool = False):
+    nombres = ["Administrador de Medios", "Administrador de Logística"]
+    if incluir_super_admin:
+        nombres.append("Super Admin")
     return (
         db.query(Rol)
-        .filter(Rol.estado.is_(True), Rol.nombre.in_([
-            "Super Admin", "Administrador de Medios", "Administrador de Logística"
-        ]))
+        .filter(Rol.estado.is_(True), Rol.nombre.in_(nombres))
         .order_by(Rol.nombre)
         .all()
     )
@@ -82,14 +83,19 @@ def crear_usuario(
     correo_usuario = correo.strip().lower()
     if len(password) < 10:
         raise HTTPException(status_code=400, detail="La contraseña debe tener al menos 10 caracteres.")
-    if db.query(Usuario).filter(
-        (Usuario.usuario == nombre_usuario) | (Usuario.correo == correo_usuario)
-    ).first():
+    db.info["omitir_filtro_empresa"] = True
+    try:
+        cuenta_duplicada = db.query(Usuario.id).filter(
+            (Usuario.usuario == nombre_usuario) | (Usuario.correo.ilike(correo_usuario))
+        ).first()
+    finally:
+        db.info.pop("omitir_filtro_empresa", None)
+    if cuenta_duplicada:
         raise HTTPException(status_code=400, detail="El usuario o correo ya está registrado.")
 
     rol = db.query(Rol).filter(Rol.id == rol_id, Rol.estado.is_(True)).first()
     if rol is None or rol.nombre not in {
-        "Super Admin", "Administrador de Medios", "Administrador de Logística"
+        "Administrador de Medios", "Administrador de Logística"
     }:
         raise HTTPException(status_code=400, detail="Selecciona un rol válido.")
 
@@ -126,7 +132,7 @@ def editar_usuario_formulario(
         context={
             "title": "Editar usuario",
             "usuario_editado": usuario,
-            "roles": _roles_disponibles(db),
+            "roles": _roles_disponibles(db, incluir_super_admin=(usuario.id == actor.id)),
             "es_propio_usuario": usuario.id == actor.id,
         },
     )
@@ -152,21 +158,27 @@ def actualizar_usuario(
     correo_usuario = correo.strip().lower()
     if len(nombre_usuario) < 3:
         raise HTTPException(status_code=400, detail="El nombre de usuario debe tener al menos 3 caracteres.")
-    if db.query(Usuario).filter(
-        Usuario.id != usuario_id,
-        (Usuario.usuario == nombre_usuario) | (Usuario.correo == correo_usuario),
-    ).first():
+    db.info["omitir_filtro_empresa"] = True
+    try:
+        cuenta_duplicada = db.query(Usuario.id).filter(
+            Usuario.id != usuario_id,
+            (Usuario.usuario == nombre_usuario) | (Usuario.correo.ilike(correo_usuario)),
+        ).first()
+    finally:
+        db.info.pop("omitir_filtro_empresa", None)
+    if cuenta_duplicada:
         raise HTTPException(status_code=400, detail="El usuario o correo ya está registrado por otra cuenta.")
 
     rol = db.query(Rol).filter(Rol.id == rol_id, Rol.estado.is_(True)).first()
-    if rol is None or rol.nombre not in {
-        "Super Admin", "Administrador de Medios", "Administrador de Logística"
-    }:
+    allowed_roles = {"Administrador de Medios", "Administrador de Logística"}
+    if user.id == actor.id and user.rol and user.rol.nombre in {"Super Admin", "Superadministrador"}:
+        allowed_roles.add(user.rol.nombre)
+    if rol is None or rol.nombre not in allowed_roles:
         raise HTTPException(status_code=400, detail="Selecciona un rol válido.")
     if user.id == actor.id and rol.id != user.rol_id:
         raise HTTPException(status_code=400, detail="No puedes cambiar tu propio rol de Super Admin.")
-    if password and len(password) < 10:
-        raise HTTPException(status_code=400, detail="La nueva contraseña debe tener al menos 10 caracteres.")
+    if password:
+        raise HTTPException(status_code=403, detail="Las contraseñas de cuentas existentes solo las puede cambiar el administrador de NOXTIUM.")
 
     user.nombre = nombre.strip()
     user.apellido = apellido.strip()
@@ -174,8 +186,6 @@ def actualizar_usuario(
     user.usuario = nombre_usuario
     user.rol_id = rol.id
     user.area = _area_para_rol(rol.nombre)
-    if password:
-        user.password = hash_password(password)
     db.commit()
     return RedirectResponse(url="/usuarios", status_code=303)
 

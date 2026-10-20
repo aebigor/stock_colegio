@@ -5,6 +5,7 @@ from app.modules.activos.movimiento_model import Movimiento
 from app.modules.activos.movimiento_schema import MovimientoCreate
 from app.modules.mantenimientos.model import Mantenimiento
 from app.modules.ubicaciones.model import Ubicacion
+from app.modules.personas.model import Persona
 
 
 class MovimientoService:
@@ -20,6 +21,10 @@ class MovimientoService:
             return None
 
         estado_anterior = activo.estado
+        if datos.persona_id is not None:
+            persona = self.db.query(Persona).filter(Persona.id == datos.persona_id).first()
+            if persona is None:
+                return None
         if datos.ubicacion_id:
             ubicacion = self.db.query(Ubicacion).filter(Ubicacion.id == datos.ubicacion_id).first()
             if ubicacion is None or ubicacion.area != activo.area:

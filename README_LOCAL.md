@@ -1,6 +1,15 @@
-# Inventario Escolar — arranque local y áreas separadas
+# Inventario Escolar GIMSAU — tema oscuro y gestión multiempresa
 
 ## Qué cambió
+
+- Se conserva el tema oscuro original: fondo azul noche, tarjetas oscuras y acento aguamarina. Los textos principales son blancos y los secundarios gris claro.
+- Se corrigió el contraste de tablas que usan fondo blanco o `table-light`: esas superficies tienen texto oscuro y enlaces azul oscuro; las tablas oscuras conservan texto blanco.
+- Se reforzaron los estilos de botones, formularios, foco de teclado y botones de acciones.
+- Se incorporó gestión multiempresa: el administrador de plataforma `tecnologia@gimsau.edu.co` puede registrar una empresa y crear su primer Super Admin con nombre, correo y contraseña.
+- Los Super Admin administran únicamente los datos de su empresa. El administrador de plataforma solo accede al módulo de Empresas y no administra los inventarios de los tenants.
+- Se agregaron migraciones para asociar usuarios, activos, categorías, ubicaciones, personas, movimientos, mantenimientos y configuración a una empresa. Los datos históricos se conservan en GIMSAU.
+- El QR del activo abre el historial y se añadió el movimiento `Disponible (se deja en bodega)`.
+
 
 - Los filtros de activos trabajan en el servidor: texto (nombre, código, serial, marca y modelo), categoría, estado del artículo, registro activo/inactivo y área (esta última solo para Super Admin).
 - Categorías ahora se pueden buscar por nombre/prefijo y filtrar por activas/inactivas. Se evita borrar una categoría que ya tenga artículos: se desactiva para conservar su trazabilidad.
@@ -53,11 +62,15 @@
 
 7. Abre `http://127.0.0.1:8000/login`.
 
-## Cuentas iniciales
+## Cuentas iniciales y empresas
 
-En una base nueva se crean estas cuentas: `admin` (Super Admin) y `bader` (Administrador de Logística). Con los valores de ejemplo de `.env.example`, las contraseñas iniciales son `CambiarAdmin2026!` y `CambiarBader2026!`, respectivamente. Cámbialas en `.env` antes del primer arranque. En bases donde ya existe una cuenta, el seeder no reemplaza su contraseña.
+- La cuenta `tecnologia@gimsau.edu.co` debe tener el rol **Administrador de Plataforma** y `empresa_id` vacío. Es la única cuenta autorizada para crear empresas y sus Super Admin.
+- En una base nueva, la contraseña inicial de esa cuenta se toma de `INITIAL_ADMIN_PASSWORD` en `.env`. En una base existente, el seeder conserva la contraseña de la cuenta existente.
+- Cada empresa nueva se crea desde **Empresas**. El formulario solicita nombre completo, correo, instituto/empresa y contraseña inicial (mínimo 10 caracteres). La contraseña se almacena con hash, nunca en texto plano.
+- El Super Admin recién creado pertenece a una sola empresa. Los usuarios normales y los datos del inventario deben quedar asociados a esa empresa.
+- La cuenta `bader` es una cuenta histórica de Logística; revisa su rol y empresa antes de usarla en una instalación nueva.
 
-El usuario `bader` ve y modifica únicamente artículos del área Logística. El Super Admin ve ambos inventarios desde Activos y Reportes. No compartas las contraseñas iniciales: usa contraseñas propias antes de exponer la web en red.
+**Importante:** antes de aplicar migraciones sobre una base existente, crea un respaldo. Después de `alembic upgrade head`, inicia sesión con `tecnologia@gimsau.edu.co` y confirma que el menú muestre únicamente **Empresas**. No uses el sistema con varios institutos hasta probar con dos empresas de prueba que cada Super Admin no puede ver ni editar los registros de la otra.
 
 ## Pruebas manuales recomendadas
 

@@ -13,8 +13,6 @@
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css" rel="stylesheet">
 
-    <link rel="stylesheet" href="/static/css/style.css">
-
     <link rel="stylesheet" href="/static/css/variables.css">
 
     <link rel="stylesheet" href="/static/css/global.css">
@@ -30,6 +28,9 @@
     <link rel="stylesheet"
     href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 
+    <link rel="stylesheet" href="/static/css/style.css?v=theme-dark-20261020">
+    {% block extra_styles %}{% endblock %}
+    <link rel="stylesheet" href="/static/css/theme-fixes.css?v=tenant-20261020-final">
 </head>
 
 <body>
@@ -38,145 +39,61 @@
 
     <!-- SIDEBAR -->
     <aside class="sidebar" id="sidebar">
-
         <div class="logo">
-
             <i class="bi bi-pc-display"></i>
-
             <div>
-
-                <h5>GIMSAU</h5>
-                <small>Inventario Escolar</small>
-
+                {% if request.state.user.rol and request.state.user.rol.nombre == 'Administrador de Plataforma' %}
+                <h5>GESTIÓN DE EMPRESAS</h5>
+                <small>Administración central de NOXTIUM</small>
+                {% else %}
+                <h5>{{ request.state.brand_name|default(request.state.user.empresa.nombre if request.state.user.empresa else 'Inventario') }} Inventario</h5>
+                <small>Sistema de inventario</small>
+                {% endif %}
             </div>
+        </div>
 
+        {% if request.state.user.rol and request.state.user.rol.nombre == 'Administrador de Plataforma' %}
+        <div class="menu-section">
+            <span class="menu-title">PLATAFORMA</span>
+            <a href="/empresas" class="menu-link{% if request.url.path == '/empresas/' or request.url.path == '/empresas' %} active{% endif %}">
+                <i class="bi bi-buildings-fill"></i>
+                <span>Empresas</span>
+            </a>
+            <a href="/empresas/configuracion" class="menu-link{% if request.url.path.startswith('/empresas/configuracion') %} active{% endif %}">
+                <i class="bi bi-shield-lock-fill"></i>
+                <span>Configuración de acceso</span>
+            </a>
+        </div>
+        {% else %}
+        <div class="menu-section">
+            <span class="menu-title">PRINCIPAL</span>
+            <a href="/dashboard" class="menu-link"><i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span></a>
         </div>
 
         <div class="menu-section">
-
-            <span class="menu-title">
-
-                PRINCIPAL
-
-            </span>
-
-            <a href="/dashboard" class="menu-link active">
-
-                <i class="bi bi-grid-1x2-fill"></i>
-
-                <span>Dashboard</span>
-
-            </a>
-
+            <span class="menu-title">INVENTARIO</span>
+            <a href="/categorias" class="menu-link"><i class="bi bi-tags-fill"></i><span>Categorías</span><span class="badge-menu">{{ total_categorias|default(0) }}</span></a>
+            <a href="/activos" class="menu-link"><i class="bi bi-pc-display"></i><span>Activos</span><span class="badge-menu">{{ total_activos|default(0) }}</span></a>
+            <a href="/mantenimientos" class="menu-link"><i class="bi bi-tools"></i><span>Mantenimientos</span><span class="badge-menu">{{ total_mantenimientos|default(0) }}</span></a>
         </div>
 
         <div class="menu-section">
-
-            <span class="menu-title">
-
-                INVENTARIO
-
-            </span>
-
-            <a href="/categorias" class="menu-link">
-
-                <i class="bi bi-tags-fill"></i>
-
-                <span>Categorias</span>
-
-                <span class="badge-menu">
-
-                    {{ total_categorias|default(0) }}
-
-                </span>
-
-            </a>
-
-            <a href="/activos" class="menu-link">
-
-                <i class="bi bi-pc-display"></i>
-
-                <span>Activos</span>
-
-                <span class="badge-menu">
-
-                    {{ total_activos|default(0) }}
-
-                </span>
-
-            </a>
-
-            <a href="/mantenimientos" class="menu-link">
-
-                <i class="bi bi-tools"></i>
-
-                <span>Mantenimientos</span> 
-
-                <span class="badge-menu">
-
-                    {{ total_mantenimientos|default(0) }}
-
-                </span>
-
-            </a>
-
+            <span class="menu-title">GESTIÓN</span>
+            <a href="/personas" class="menu-link"><i class="bi bi-people-fill"></i><span>Personas</span></a>
         </div>
 
         <div class="menu-section">
-
-            <span class="menu-title">
-
-                GESTIÓN
-
-            </span>
-
-            <a href="/personas" class="menu-link">
-
-                <i class="bi bi-people-fill"></i>
-
-                <span>Personas</span> 
-
-            </a>
-
-           
-
-
-        </div>
-
-        <div class="menu-section">
-
-            <span class="menu-title">
-
-                ADMINISTRACIÓN
-
-            </span>
-
-            {% if request.state.user and request.state.user.rol and request.state.user.rol.nombre in ["Super Admin", "Superadministrador", "Administrador"] %}
-            <a href="/usuarios" class="menu-link">
-                <i class="bi bi-person-gear"></i>
-                <span>Usuarios</span>
-            </a>
+            <span class="menu-title">ADMINISTRACIÓN</span>
+            {% if request.state.user.rol and request.state.user.rol.nombre in ["Super Admin", "Superadministrador"] %}
+            <a href="/usuarios" class="menu-link"><i class="bi bi-person-gear"></i><span>Usuarios</span></a>
+            {% if request.state.es_superadmin_principal|default(false) %}
+            <a href="/configuracion" class="menu-link"><i class="bi bi-gear-wide-connected"></i><span>Configuraciones</span></a>
             {% endif %}
-
-            <a href="/reportes" class="menu-link">
-
-                <i class="bi bi-bar-chart-fill"></i>
-
-                <span>Reportes</span>
-
-            </a>
-
-        
-
-            <a href="/ubicaciones" class="menu-link">
-
-                <i class="bi bi-geo-alt-fill"></i>
-
-                <span>Ubicaciones</span>
-
-            </a>
-
+            {% endif %}
+            <a href="/reportes" class="menu-link"><i class="bi bi-bar-chart-fill"></i><span>Reportes</span></a>
+            <a href="/ubicaciones" class="menu-link"><i class="bi bi-geo-alt-fill"></i><span>Ubicaciones</span></a>
         </div>
+        {% endif %}
 
         <div class="logout">
 
@@ -209,7 +126,7 @@
 
                     <strong>{{ request.state.user.nombre }} {{ request.state.user.apellido }}</strong>
                     <br>
-                    <small>@{{ request.state.user.usuario }} · {{ request.state.user.area }}</small>
+                    <small>@{{ request.state.user.usuario }} · {{ request.state.user.rol.nombre if request.state.user.rol else request.state.user.area }}</small>
 
                 </div>
 

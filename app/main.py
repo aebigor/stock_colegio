@@ -15,6 +15,7 @@ from app.modules.reportes import router as reportes_router
 from app.modules.dashboard.routes import router as dashboard_router
 from app.modules.mantenimientos.routes import router as mantenimientos_router
 from app.modules.configuracion import router as configuracion_router
+from app.modules.empresas import router as empresas_router
 from app.seeders.create_admin import create_admin
 
 
@@ -38,6 +39,7 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 app.include_router(auth_router)
+app.include_router(empresas_router)
 app.include_router(usuarios_router)
 app.include_router(configuracion_router)
 app.include_router(activos_router)

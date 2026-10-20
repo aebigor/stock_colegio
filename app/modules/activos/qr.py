@@ -12,7 +12,7 @@ class QRGenerator:
     def generar_pdf(activo, base_url: str = "http://127.0.0.1:8000"):
         # Permite usar la URL del servidor o PUBLIC_BASE_URL para que el QR
         # no quede atado a localhost al imprimir desde un entorno publicado.
-        url = urljoin(base_url.rstrip("/") + "/", f"activos/{activo.id}/detalle")
+        url = urljoin(base_url.rstrip("/") + "/", f"activos/{activo.id}/historial")
         qr = qrcode.QRCode(
             version=None,
             error_correction=qrcode.constants.ERROR_CORRECT_M,

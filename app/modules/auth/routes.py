@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.templates import templates
 from app.modules.auth.models import Usuario
+from app.core.config import settings
 from .service import AuthService
 
 router = APIRouter(tags=["Autenticación"])
@@ -47,7 +48,8 @@ def login_post(
             status_code=401,
         )
 
-    response = RedirectResponse(url="/dashboard", status_code=303)
+    is_platform = (user.correo.strip().lower() == settings.PLATFORM_ADMIN_EMAIL.strip().lower() and user.rol and user.rol.nombre == "Administrador de Plataforma" and user.empresa_id is None)
+    response = RedirectResponse(url="/empresas" if is_platform else "/dashboard", status_code=303)
     response.set_cookie(
         key="access_token",
         value=token,
