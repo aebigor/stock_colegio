@@ -1,298 +1,46 @@
 {% extends "layouts/base.html" %}
-
 {% block content %}
-
 <link rel="stylesheet" href="/static/css/activos.css">
-
 <div class="page-header">
-
-    <div>
-
-        <h1>Activos</h1>
-
-        <p>Administra todos los activos del colegio.</p>
-
-    </div>
-
-    <a
-        href="/activos/crear"
-        class="btn-primary"
-    >
-
-        <i class="bi bi-plus-circle"></i>
-
-        Nuevo Activo
-
-    </a>
-
+  <div><h1>Inventario de activos</h1><p>Área consultada: <strong>{{ area_filtro }}</strong>. Las etiquetas incluyen todos los artículos registrados, también los que están en mantenimiento o dados de baja.</p></div>
+  <div class="d-flex flex-wrap gap-2">
+    <a href="/activos/codigos/pdf?area={{ area_filtro | urlencode }}" class="btn btn-outline-primary"><i class="bi bi-filetype-pdf"></i> Descargar QR + barras (PDF)</a>
+    <a href="/activos/crear" class="btn-primary"><i class="bi bi-plus-circle"></i> Nuevo activo</a>
+  </div>
 </div>
-
 <div class="stats-grid">
-
-    <div class="stat-card">
-
-        <i class="bi bi-pc-display"></i>
-
-        <h3>{{ activos|length }}</h3>
-
-        <span>Total Activos</span>
-
-    </div>
-
-    <div class="stat-card">
-
-        <i class="bi bi-check-circle"></i>
-
-        <h3>{{ disponibles }}</h3>
-
-        <span>Disponibles</span>
-
-    </div>
-
-    <div class="stat-card">
-
-        <i class="bi bi-arrow-left-right"></i>
-
-        <h3>{{ prestados }}</h3>
-
-        <span>Prestados</span>
-
-    </div>
-
-    <div class="stat-card">
-
-        <i class="bi bi-tools"></i>
-
-        <h3>{{ mantenimiento }}</h3>
-
-        <span>Mantenimiento</span>
-
-    </div>
-
+  <div class="stat-card"><i class="bi bi-pc-display"></i><h3>{{ activos|length }}</h3><span>Resultados</span></div>
+  <div class="stat-card"><i class="bi bi-check-circle"></i><h3>{{ disponibles }}</h3><span>Disponibles</span></div>
+  <div class="stat-card"><i class="bi bi-arrow-left-right"></i><h3>{{ prestados }}</h3><span>Prestados</span></div>
+  <div class="stat-card"><i class="bi bi-tools"></i><h3>{{ mantenimiento }}</h3><span>En mantenimiento</span></div>
 </div>
-
 <div class="card-panel">
-
-    <div class="table-header">
-
-        <input
-            class="search-input"
-            type="text"
-            placeholder="Buscar activo..."
-        >
-
-    </div>
-
-    <table>
-
-        <thead>
-
-            <tr>
-
-                <th>Código</th>
-
-                <th>Nombre</th>
-
-                <th>Categoría</th>
-
-                <th>Ubicación</th>
-
-                <th>Estado</th>
-
-                <th>Responsable</th>
-
-                <th style="width:340px;">
-
-                    Acciones
-
-                </th>
-
-            </tr>
-
-        </thead>
-
-        <tbody>
-
-        {% for activo in activos %}
-
-            <tr>
-
-                <td>
-
-                    <strong>{{ activo.codigo_barras }}</strong>
-
-                    <br>
-
-                    <small>{{ activo.serial or "-" }}</small>
-
-                </td>
-
-                <td>
-
-                    <strong>{{ activo.nombre }}</strong>
-
-                    <br>
-
-                    <small>{{ activo.marca or "" }} {{ activo.modelo or "" }}</small>
-
-                </td>
-
-                <td>
-
-                    {{ activo.categoria.nombre }}
-
-                </td>
-
-                <td>
-
-                    {% if activo.ubicacion %}
-
-                        {{ activo.ubicacion.nombre }}
-
-                    {% else %}
-
-                        -
-
-                    {% endif %}
-
-                </td>
-
-                <td>
-
-                    {% if activo.estado=="Disponible" %}
-
-                        <span class="badge-success">
-
-                            Disponible
-
-                        </span>
-
-                    {% elif activo.estado=="Prestado" %}
-
-                        <span class="badge-warning">
-
-                            Prestado
-
-                        </span>
-
-                    {% elif activo.estado=="Mantenimiento" %}
-
-                        <span class="badge-info">
-
-                            Mantenimiento
-
-                        </span>
-
-                    {% else %}
-
-                        <span class="badge-danger">
-
-                            {{ activo.estado }}
-
-                        </span>
-
-                    {% endif %}
-
-                </td>
-
-                <td>
-
-                    {{ activo.responsable or "Sin asignar" }}
-
-                </td>
-
-                <td>
-
-                    <div class="acciones">
-
-                        <a
-                            class="btn-icon"
-                            href="/activos/{{ activo.id }}/detalle"
-                            title="Detalle"
-                        >
-
-                            <i class="bi bi-eye"></i>
-
-                        </a>
-
-                        <a
-                            class="btn-icon"
-                            href="/activos/{{ activo.id }}/editar"
-                            title="Editar"
-                        >
-
-                            <i class="bi bi-pencil"></i>
-
-                        </a>
-
-                        <a
-                            class="btn-icon"
-                            href="/activos/{{ activo.id }}/codigo-barras"
-                            title="Código de barras"
-                        >
-
-                            <i class="bi bi-upc-scan"></i>
-
-                        </a>
-
-                        <a
-                            class="btn-icon"
-                            href="/activos/{{ activo.id }}/qr"
-                            title="QR"
-                        >
-
-                            <i class="bi bi-qr-code"></i>
-
-                        </a>
-
-                        <a
-                            class="btn-icon btn-primary-mini"
-                            href="/activos/{{ activo.id }}/movimiento"
-                            title="Registrar Movimiento"
-                        >
-
-                            <i class="bi bi-arrow-left-right"></i>
-
-                        </a>
-
-                        <a
-                            class="btn-icon"
-                            href="/activos/{{ activo.id }}/historial"
-                            title="Historial"
-                        >
-
-                            <i class="bi bi-clock-history"></i>
-
-                        </a>
-
-                    </div>
-
-                </td>
-
-            </tr>
-
-        {% else %}
-
-            <tr>
-
-                <td colspan="7">
-
-                    <center>
-
-                        No existen activos registrados.
-
-                    </center>
-
-                </td>
-
-            </tr>
-
-        {% endfor %}
-
-        </tbody>
-
-    </table>
-
+  <form class="row g-2 align-items-end mb-3" method="get" action="/activos">
+    <div class="col-lg-3 col-md-6"><label class="form-label">Buscar artículo</label><input class="form-control" type="search" name="q" value="{{ q }}" placeholder="Nombre, código, serial, marca..."></div>
+    <div class="col-lg-2 col-md-6"><label class="form-label">Categoría</label><select class="form-select" name="categoria_id"><option value="">Todas</option>{% for categoria in categorias %}<option value="{{ categoria.id }}" {% if categoria_id == categoria.id %}selected{% endif %}>{{ categoria.nombre }}</option>{% endfor %}</select></div>
+    <div class="col-lg-2 col-md-4"><label class="form-label">Estado del artículo</label><select class="form-select" name="estado"><option value="Todos" {% if estado_filtro == 'Todos' %}selected{% endif %}>Todos</option><option value="Disponible" {% if estado_filtro == 'Disponible' %}selected{% endif %}>Disponible</option><option value="Prestado" {% if estado_filtro == 'Prestado' %}selected{% endif %}>Prestado</option><option value="Mantenimiento" {% if estado_filtro == 'Mantenimiento' %}selected{% endif %}>Mantenimiento</option><option value="Baja" {% if estado_filtro == 'Baja' %}selected{% endif %}>Baja</option></select></div>
+    <div class="col-lg-2 col-md-4"><label class="form-label">Registro</label><select class="form-select" name="registro"><option value="Todos" {% if registro_filtro == 'Todos' %}selected{% endif %}>Todos</option><option value="Activos" {% if registro_filtro == 'Activos' %}selected{% endif %}>Registrados activos</option><option value="Inactivos" {% if registro_filtro == 'Inactivos' %}selected{% endif %}>Desactivados</option></select></div>
+    {% if puede_ver_areas %}<div class="col-lg-2 col-md-4"><label class="form-label">Área</label><select class="form-select" name="area"><option value="Todas" {% if area_filtro == 'Todas' %}selected{% endif %}>Ambas</option><option value="Medios" {% if area_filtro == 'Medios' %}selected{% endif %}>Medios</option><option value="Logística" {% if area_filtro == 'Logística' %}selected{% endif %}>Logística</option></select></div>{% endif %}
+    <div class="col-lg-1 col-md-12 d-flex gap-2"><button class="btn btn-primary" type="submit" title="Aplicar filtros"><i class="bi bi-search"></i></button><a class="btn btn-outline-secondary" href="/activos" title="Limpiar filtros"><i class="bi bi-x-lg"></i></a></div>
+  </form>
+  <div class="table-responsive"><table class="table align-middle">
+    <thead><tr><th>Código / Serial</th><th>Artículo</th><th>Categoría</th><th>Ubicación</th><th>Área</th><th>Estado</th><th>Registro</th><th style="min-width:260px">Acciones</th></tr></thead>
+    <tbody>{% for activo in activos %}<tr>
+      <td><strong>{{ activo.codigo_barras }}</strong><br><small>{{ activo.serial or 'Sin serial' }}</small><br><small>{{ activo.codigo }}</small></td>
+      <td><strong>{{ activo.nombre }}</strong><br><small>{{ activo.marca or '' }} {{ activo.modelo or '' }}</small></td>
+      <td>{{ activo.categoria.nombre if activo.categoria else 'Sin categoría' }}</td><td>{{ activo.ubicacion.nombre if activo.ubicacion else '-' }}</td><td>{{ activo.area }}</td>
+      <td>{% if activo.estado == 'Disponible' %}<span class="badge-success">Disponible</span>{% elif activo.estado == 'Prestado' %}<span class="badge-warning">Prestado</span>{% elif activo.estado == 'Mantenimiento' %}<span class="badge-info">Mantenimiento</span>{% else %}<span class="badge-danger">{{ activo.estado }}</span>{% endif %}</td>
+      <td>{% if activo.activo %}<span class="badge-success">Activo</span>{% else %}<span class="badge-danger">Desactivado</span>{% endif %}</td>
+      <td><div class="d-flex flex-wrap gap-1">
+        <a class="btn btn-sm btn-outline-secondary" href="/activos/{{ activo.id }}/detalle" title="Detalle"><i class="bi bi-eye"></i></a>
+        <a class="btn btn-sm btn-outline-primary" href="/activos/{{ activo.id }}/editar" title="Editar"><i class="bi bi-pencil"></i></a>
+        <a class="btn btn-sm btn-outline-secondary" href="/activos/{{ activo.id }}/barcode" title="Código de barras"><i class="bi bi-upc-scan"></i></a>
+        <a class="btn btn-sm btn-outline-secondary" href="/activos/{{ activo.id }}/qr" title="QR"><i class="bi bi-qr-code"></i></a>
+        <a class="btn btn-sm btn-outline-secondary" href="/activos/{{ activo.id }}/movimiento" title="Movimiento"><i class="bi bi-arrow-left-right"></i></a>
+        <a class="btn btn-sm btn-outline-secondary" href="/activos/{{ activo.id }}/historial" title="Historial"><i class="bi bi-clock-history"></i></a>
+        <form method="post" action="/activos/{{ activo.id }}/estado" onsubmit="return confirm('¿Seguro que quieres {% if activo.activo %}desactivar{% else %}reactivar{% endif %} este artículo? El cambio quedará en su historial.');"><button class="btn btn-sm btn-outline-danger" type="submit">{% if activo.activo %}Desactivar{% else %}Reactivar{% endif %}</button></form>
+      </div></td>
+    </tr>{% else %}<tr><td colspan="8" class="text-center py-4">No hay artículos con estos filtros.</td></tr>{% endfor %}</tbody>
+  </table></div>
 </div>
-
 {% endblock %}

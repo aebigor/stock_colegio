@@ -1,155 +1,26 @@
 {% extends "layouts/base.html" %}
-
 {% block content %}
-
 <link rel="stylesheet" href="/static/css/categorias.css">
-
 <div class="page-header">
-
-    <div>
-
-        <h1>Categorías</h1>
-
-        <p>Administra todas las categorías de activos del colegio.</p>
-
-    </div>
-
-    <a href="/categorias/crear" class="btn-primary">
-
-        <i class="bi bi-plus-circle"></i>
-
-        Nueva Categoría
-
-    </a>
-
+  <div><h1>Categorías</h1><p>Filtra y administra los tipos de activos del colegio.</p></div>
+  <a href="/categorias/crear" class="btn-primary"><i class="bi bi-plus-circle"></i> Nueva categoría</a>
 </div>
-
 <div class="card-panel">
-
-    <div class="table-header">
-
-        <input
-            type="text"
-            placeholder="Buscar categoría..."
-            class="search-input"
-        >
-
-    </div>
-
-    <table>
-
-        <thead>
-
-            <tr>
-
-                <th>ID</th>
-
-                <th>Icono</th>
-
-                <th>Nombre</th>
-
-                <th>Prefijo</th>
-
-                <th>Préstamo</th>
-
-                <th>Firma</th>
-
-                <th>Estado</th>
-
-                <th>Acciones</th>
-
-            </tr>
-
-        </thead>
-
-        <tbody>
-
-        {% for categoria in categorias %}
-
-            <tr>
-
-                <td>{{ categoria.id }}</td>
-
-                <td>
-
-                    <i class="bi {{ categoria.icono }}"></i>
-
-                </td>
-
-                <td>{{ categoria.nombre }}</td>
-
-                <td>{{ categoria.prefijo }}</td>
-
-                <td>
-
-                    {% if categoria.permite_prestamo %}
-
-                        ✅
-
-                    {% else %}
-
-                        ❌
-
-                    {% endif %}
-
-                </td>
-
-                <td>
-
-                    {% if categoria.requiere_firma %}
-
-                        ✅
-
-                    {% else %}
-
-                        ❌
-
-                    {% endif %}
-
-                </td>
-
-                <td>
-
-                    {% if categoria.activo %}
-
-                        <span class="badge-success">
-
-                            Activo
-
-                        </span>
-
-                    {% else %}
-
-                        <span class="badge-danger">
-
-                            Inactivo
-
-                        </span>
-
-                    {% endif %}
-
-                </td>
-
-                <td>
-
-                    <a href="/categorias/{{ categoria.id }}/editar">
-
-                        ✏️
-
-                    </a>
-
-                </td>
-
-            </tr>
-
-        {% endfor %}
-
-        </tbody>
-
-    </table>
-
+  <form class="row g-2 align-items-end mb-3" method="get" action="/categorias">
+    <div class="col-md-7"><label class="form-label">Buscar</label><input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Nombre o prefijo, por ejemplo computadores o PC"></div>
+    <div class="col-md-3"><label class="form-label">Estado</label><select name="estado" class="form-select"><option value="Todas" {% if estado_filtro == 'Todas' %}selected{% endif %}>Todas</option><option value="Activas" {% if estado_filtro == 'Activas' %}selected{% endif %}>Activas</option><option value="Inactivas" {% if estado_filtro == 'Inactivas' %}selected{% endif %}>Inactivas</option></select></div>
+    <div class="col-md-2 d-flex gap-2"><button class="btn btn-primary w-100" type="submit"><i class="bi bi-search"></i> Filtrar</button><a href="/categorias" class="btn btn-outline-secondary" title="Limpiar"><i class="bi bi-x-lg"></i></a></div>
+  </form>
+  <div class="table-responsive"><table class="table align-middle">
+    <thead><tr><th>ID</th><th>Ícono</th><th>Nombre</th><th>Prefijo</th><th>Préstamo</th><th>Firma</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>
+    {% for categoria in categorias %}<tr>
+      <td>{{ categoria.id }}</td><td><i class="bi {{ categoria.icono }}" style="color:{{ categoria.color }}"></i></td><td><strong>{{ categoria.nombre }}</strong><br><small>{{ categoria.descripcion or '' }}</small></td><td><code>{{ categoria.prefijo }}</code></td>
+      <td>{{ 'Sí' if categoria.permite_prestamo else 'No' }}</td><td>{{ 'Sí' if categoria.requiere_firma else 'No' }}</td>
+      <td>{% if categoria.activo %}<span class="badge-success">Activa</span>{% else %}<span class="badge-danger">Inactiva</span>{% endif %}</td>
+      <td><div class="d-flex gap-2"><a class="btn btn-sm btn-outline-primary" href="/categorias/{{ categoria.id }}/editar" title="Editar"><i class="bi bi-pencil"></i></a><form method="post" action="/categorias/{{ categoria.id }}/estado"><button class="btn btn-sm btn-outline-secondary" type="submit">{% if categoria.activo %}Desactivar{% else %}Activar{% endif %}</button></form></div></td>
+    </tr>{% else %}<tr><td colspan="8" class="text-center py-4">No hay categorías que coincidan con los filtros.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
 </div>
-
-<script src="/static/js/categorias.js"></script>
-
 {% endblock %}

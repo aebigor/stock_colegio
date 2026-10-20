@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.templates import templates
+from app.modules.auth.dependencies import get_current_user
 
 from .schema import (
     PersonaCreate,
@@ -22,7 +23,7 @@ from .service import PersonaService
 
 router = APIRouter(
     prefix="/personas",
-    tags=["Personas"]
+    tags=["Personas"], dependencies=[Depends(get_current_user)]
 )
 
 

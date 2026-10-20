@@ -1,0 +1,15 @@
+{% extends "layouts/base.html" %}
+{% block content %}
+<div class="page-header"><div><h1>Registrar usuario</h1><p>El sistema asigna el inventario según el rol seleccionado.</p></div></div>
+<form method="post" action="/usuarios/crear" class="card-panel">
+  <div class="row g-3">
+    <div class="col-md-6"><label class="form-label">Nombres</label><input class="form-control" name="nombre" maxlength="100" required></div>
+    <div class="col-md-6"><label class="form-label">Apellidos</label><input class="form-control" name="apellido" maxlength="100" required></div>
+    <div class="col-md-6"><label class="form-label">Correo</label><input class="form-control" type="email" name="correo" maxlength="150" required></div>
+    <div class="col-md-6"><label class="form-label">Nombre de usuario</label><input class="form-control" name="usuario" minlength="3" maxlength="50" required></div>
+    <div class="col-md-6"><label class="form-label">Contraseña inicial</label><input class="form-control" type="password" name="password" minlength="10" required><small class="text-muted">Usa mínimo 10 caracteres.</small></div>
+    <div class="col-md-6"><label class="form-label">Rol / Inventario</label><select class="form-select" name="rol_id" required><option value="">Selecciona un rol</option>{% for rol in roles %}<option value="{{ rol.id }}">{{ rol.nombre }}</option>{% endfor %}</select></div>
+  </div>
+  <hr><button class="btn btn-primary" type="submit"><i class="bi bi-save"></i> Guardar usuario</button> <a href="/usuarios" class="btn btn-outline-secondary">Cancelar</a>
+</form>
+{% endblock %}

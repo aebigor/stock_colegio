@@ -43,6 +43,16 @@
 
     </div>
 
+    {% if puede_ver_areas %}
+    <div class="form-group">
+        <label>Inventario / Área *</label>
+        <select name="area" required>
+            <option value="Medios" {% if area_inicial == "Medios" %}selected{% endif %}>Medios</option>
+            <option value="Logística" {% if area_inicial == "Logística" %}selected{% endif %}>Logística</option>
+        </select>
+    </div>
+    {% endif %}
+
     <!-- Categoria -->
 
     <div class="form-group">
@@ -152,11 +162,13 @@
             name="ubicacion_id"
             required
         >
+            <option value="">Seleccione una bodega...</option>
 
             {% for ubicacion in ubicaciones %}
 
             <option
                 value="{{ ubicacion.id }}"
+                data-area="{{ ubicacion.area }}"
             >
 
                 {{ ubicacion.nombre }}
@@ -184,23 +196,11 @@
             name="estado"
         >
 
-            <option>
+            <option value="Disponible">Disponible</option>
+            <option value="Prestado">Prestado</option>
+            <option value="Mantenimiento">Mantenimiento
 
-                Disponible
-
-            </option>
-
-            <option>
-
-                Mantenimiento
-
-            </option>
-
-            <option>
-
-                Baja
-
-            </option>
+            <option value="Baja">Baja</option>
 
         </select>
 
@@ -257,5 +257,29 @@
 </form>
 
 </div>
+<script>
+(() => {
+  const areaSelect = document.querySelector('select[name="area"]');
+  const locationSelect = document.querySelector('select[name="ubicacion_id"]');
+  if (!locationSelect) return;
+  const filterLocations = () => {
+    const chosenArea = areaSelect ? areaSelect.value : {{ area_inicial | tojson }};
+    let selectedVisible = false;
+    [...locationSelect.options].forEach((option) => {
+      if (!option.value) return;
+      const visible = !option.dataset.area || option.dataset.area === chosenArea;
+      option.hidden = !visible;
+      option.disabled = !visible;
+      if (visible && option.selected) selectedVisible = true;
+    });
+    if (!selectedVisible) {
+      const first = [...locationSelect.options].find((option) => option.value && !option.disabled);
+      locationSelect.value = first ? first.value : '';
+    }
+  };
+  if (areaSelect) areaSelect.addEventListener('change', filterLocations);
+  filterLocations();
+})();
+</script>
 
 {% endblock %}

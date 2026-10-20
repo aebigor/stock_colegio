@@ -1,0 +1,35 @@
+{% extends "layouts/base.html" %}
+{% block content %}
+<div class="page-header">
+  <div><h1>Configuración del colegio</h1><p>Define el nombre y el formato general para los códigos internos.</p></div>
+</div>
+<div class="card-panel">
+  <form method="post" action="/configuracion/guardar">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <label class="form-label" for="nombre_colegio">Nombre del colegio</label>
+        <input id="nombre_colegio" class="form-control" name="nombre_colegio" maxlength="150" required value="{{ configuracion.nombre_colegio if configuracion else '' }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="abreviatura">Abreviatura</label>
+        <input id="abreviatura" class="form-control" name="abreviatura" maxlength="10" required value="{{ configuracion.abreviatura if configuracion else '' }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="longitud_consecutivo">Longitud del consecutivo</label>
+        <input id="longitud_consecutivo" class="form-control" type="number" min="1" max="12" name="longitud_consecutivo" required value="{{ configuracion.longitud_consecutivo if configuracion else 6 }}">
+      </div>
+      <div class="col-md-9">
+        <label class="form-label" for="formato_codigo">Formato del código</label>
+        <input id="formato_codigo" class="form-control" name="formato_codigo" maxlength="100" required value="{{ configuracion.formato_codigo if configuracion else '{PREFIJO}_{COLEGIO}_{CONSECUTIVO}' }}">
+        <small class="text-muted">Variables disponibles: {PREFIJO}, {COLEGIO}, {CONSECUTIVO}.</small>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="separador">Separador</label>
+        <input id="separador" class="form-control" name="separador" maxlength="2" required value="{{ configuracion.separador if configuracion else '_' }}">
+      </div>
+    </div>
+    <hr>
+    <button class="btn btn-primary" type="submit"><i class="bi bi-save"></i> Guardar configuración</button>
+  </form>
+</div>
+{% endblock %}

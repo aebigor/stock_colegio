@@ -24,6 +24,8 @@ class MovimientoBase(BaseModel):
 
     imagen: str | None = None
 
+    area: str = "Medios"
+
 
 class MovimientoCreate(MovimientoBase):
     pass

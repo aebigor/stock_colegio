@@ -1,0 +1,22 @@
+{% extends "layouts/base.html" %}
+{% block content %}
+<div class="page-header">
+  <div><h1>Usuarios y permisos</h1><p>Gestiona quién puede entrar y qué inventario puede administrar.</p></div>
+  <a href="/usuarios/crear" class="btn-primary"><i class="bi bi-person-plus"></i> Registrar usuario</a>
+</div>
+<div class="card-panel">
+  <div class="table-responsive"><table class="table align-middle">
+    <thead><tr><th>Usuario</th><th>Correo</th><th>Rol</th><th>Inventario asignado</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <tbody>
+    {% for usuario in usuarios %}
+      <tr>
+        <td><strong>{{ usuario.nombre }} {{ usuario.apellido }}</strong><br><small>@{{ usuario.usuario }}</small></td>
+        <td>{{ usuario.correo }}</td><td>{{ usuario.rol.nombre if usuario.rol else 'Sin rol' }}</td><td>{{ usuario.area }}</td>
+        <td>{% if usuario.estado %}<span class="badge-success">Activo</span>{% else %}<span class="badge-danger">Inactivo</span>{% endif %}</td>
+        <td><div class="d-flex flex-wrap gap-1"><a href="/usuarios/{{ usuario.id }}/editar" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i> Editar</a>{% if request.state.user and usuario.id != request.state.user.id %}<form method="post" action="/usuarios/{{ usuario.id }}/estado"><button class="btn btn-sm btn-outline-secondary" type="submit">{% if usuario.estado %}Desactivar{% else %}Activar{% endif %}</button></form>{% else %}<small class="align-self-center">Sesión actual</small>{% endif %}</div></td>
+      </tr>
+    {% else %}<tr><td colspan="6">Todavía no hay usuarios.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endblock %}

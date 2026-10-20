@@ -67,6 +67,12 @@ class Usuario(Base):
     rol_id: Mapped[int] = mapped_column(
         ForeignKey("roles.id")
     )
+    area: Mapped[str] = mapped_column(
+        String(50),
+        default="Medios",
+        server_default="Medios",
+        nullable=False,
+    )
 
     # Relación bidireccional corregida
     rol = relationship(

@@ -1,148 +1,32 @@
 {% extends "layouts/base.html" %}
-
 {% block content %}
-
-<link rel="stylesheet" href="/static/css/ubicaciones.css">
-
 <div class="page-header">
-
-    <div>
-
-        <h1>Ubicaciones</h1>
-
-        <p>
-
-            Administra todas las ubicaciones del colegio.
-
-        </p>
-
-    </div>
-
-    <a href="/ubicaciones/crear" class="btn-primary">
-
-        <i class="bi bi-plus-circle"></i>
-
-        Nueva Ubicación
-
-    </a>
-
+  <div><h1>Bodegas y ubicaciones</h1><p>Las bodegas se administran de forma independiente por inventario.</p></div>
+  <a href="/ubicaciones/crear" class="btn-primary"><i class="bi bi-plus-circle"></i> Nueva bodega / ubicación</a>
 </div>
-
-
 <div class="card-panel">
-
-    <div class="table-header">
-
-        <input
-            type="text"
-            class="search-input"
-            placeholder="Buscar ubicación..."
-        >
-
-    </div>
-
-    <table>
-
-        <thead>
-
-            <tr>
-
-                <th>ID</th>
-
-                <th>Código</th>
-
-                <th>Nombre</th>
-
-                <th>Tipo</th>
-
-                <th>Bloque</th>
-
-                <th>Piso</th>
-
-                <th>Estado</th>
-
-                <th>Acciones</th>
-
-            </tr>
-
-        </thead>
-
-        <tbody>
-
-        {% for ubicacion in ubicaciones %}
-
-            <tr>
-
-                <td>{{ ubicacion.id }}</td>
-
-                <td>{{ ubicacion.codigo }}</td>
-
-                <td>{{ ubicacion.nombre }}</td>
-
-                <td>{{ ubicacion.tipo.nombre }}</td>
-
-                <td>{{ ubicacion.bloque }}</td>
-
-                <td>{{ ubicacion.piso }}</td>
-
-                <td>
-
-                    {% if ubicacion.activo %}
-
-                        <span class="badge-success">
-
-                            Activo
-
-                        </span>
-
-                    {% else %}
-
-                        <span class="badge-danger">
-
-                            Inactivo
-
-                        </span>
-
-                    {% endif %}
-
-                </td>
-
-                <td>
-
-<a
-href="/ubicaciones/{{ ubicacion.id }}/editar"
-class="btn btn-sm btn-warning">
-
-<i class="bi bi-pencil-square"></i>
-
-</a>
-
-<a
-href="/ubicaciones/{{ ubicacion.id }}/estado"
-class="btn btn-sm btn-secondary">
-
-{% if ubicacion.activo %}
-
-<i class="bi bi-eye-slash"></i>
-
-{% else %}
-
-<i class="bi bi-eye"></i>
-
-{% endif %}
-
-</a>
-
-</td>
-
-            </tr>
-
-        {% endfor %}
-
-        </tbody>
-
+  {% if puede_ver_areas %}
+  <form method="get" action="/ubicaciones" class="row g-2 align-items-end mb-3">
+    <div class="col-md-4"><label class="form-label">Inventario</label><select class="form-select" name="area"><option value="Todas" {% if area_filtro == 'Todas' %}selected{% endif %}>Todas las áreas</option><option value="Medios" {% if area_filtro == 'Medios' %}selected{% endif %}>Medios</option><option value="Logística" {% if area_filtro == 'Logística' %}selected{% endif %}>Logística</option></select></div>
+    <div class="col-auto"><button class="btn btn-primary" type="submit"><i class="bi bi-filter"></i> Filtrar</button><a class="btn btn-outline-secondary" href="/ubicaciones">Limpiar</a></div>
+  </form>
+  {% else %}<p><strong>Inventario:</strong> {{ area_filtro }}</p>{% endif %}
+  <div class="table-responsive">
+    <table class="table align-middle">
+      <thead><tr><th>Código</th><th>Nombre</th><th>Inventario</th><th>Tipo</th><th>Sede</th><th>Curso</th><th>Piso</th><th>Estado</th><th>Acciones</th></tr></thead>
+      <tbody>
+      {% for ubicacion in ubicaciones %}
+        <tr>
+          <td>{{ ubicacion.codigo }}</td><td><strong>{{ ubicacion.nombre }}</strong><br><small>{{ ubicacion.descripcion or '' }}</small></td>
+          <td>{{ ubicacion.area }}</td><td>{{ ubicacion.tipo }}</td><td>{{ ubicacion.sede }}</td><td>{{ ubicacion.curso or '—' }}</td><td>{{ ubicacion.piso or '—' }}</td>
+          <td>{% if ubicacion.activo %}<span class="badge-success">Activa</span>{% else %}<span class="badge-danger">Inactiva</span>{% endif %}</td>
+          <td><div class="d-flex flex-wrap gap-1"><a href="/ubicaciones/{{ ubicacion.id }}/editar" class="btn btn-sm btn-outline-primary" title="Editar"><i class="bi bi-pencil-square"></i></a><a href="/ubicaciones/{{ ubicacion.id }}/estado" class="btn btn-sm btn-outline-secondary" title="{% if ubicacion.activo %}Desactivar{% else %}Activar{% endif %}"><i class="bi {% if ubicacion.activo %}bi-eye-slash{% else %}bi-eye{% endif %}"></i></a></div></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9" class="text-center py-4">No hay bodegas registradas para esta área.</td></tr>
+      {% endfor %}
+      </tbody>
     </table>
-
+  </div>
 </div>
-
 {% endblock %}

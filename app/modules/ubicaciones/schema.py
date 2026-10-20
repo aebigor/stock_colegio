@@ -7,6 +7,8 @@ class UbicacionBase(BaseModel):
 
     codigo: str
 
+    area: str = "Medios"
+
     curso: str | None = None
 
     sede: str

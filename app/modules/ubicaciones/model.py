@@ -4,6 +4,7 @@ from sqlalchemy import (
     DateTime,
     Integer,
     String,
+    UniqueConstraint,
     func,
 )
 
@@ -13,6 +14,7 @@ from app.core.database import Base
 class Ubicacion(Base):
 
     __tablename__ = "ubicaciones"
+    __table_args__ = (UniqueConstraint("area", "codigo", name="uq_ubicaciones_area_codigo"),)
 
     id = Column(
         Integer,
@@ -26,8 +28,16 @@ class Ubicacion(Base):
 
     codigo = Column(
         String(20),
-        unique=True,
         nullable=False
+    )
+
+    # Cada bodega/ubicación pertenece a un inventario independiente.
+    area = Column(
+        String(50),
+        nullable=False,
+        default="Medios",
+        server_default="Medios",
+        index=True,
     )
 
     curso = Column(

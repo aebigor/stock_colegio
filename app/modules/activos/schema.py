@@ -25,6 +25,8 @@ class ActivoBase(BaseModel):
 
     activo: bool = True
 
+    area: str = "Medios"
+
 
 # ==========================================
 # CREAR

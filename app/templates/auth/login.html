@@ -8,6 +8,8 @@
 
         <h1>Stock de Inventario</h1>
 
+        {% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+
         <form method="post" action="/login">
 
             <input

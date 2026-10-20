@@ -73,6 +73,14 @@ class Movimiento(Base):
         String(255)
     )
 
+    area = Column(
+        String(50),
+        nullable=False,
+        default="Medios",
+        server_default="Medios",
+        index=True,
+    )
+
     activo = Column(
         Boolean,
         default=True
@@ -83,7 +91,7 @@ class Movimiento(Base):
         server_default=func.now()
     )
 
-    activo_rel = relationship("Activo")
+    activo_rel = relationship("Activo", back_populates="movimientos")
 
     persona = relationship("Persona")
 

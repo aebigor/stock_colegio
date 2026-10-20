@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     DATABASE_USER: str
     DATABASE_PASSWORD: str
 
+    INITIAL_ADMIN_PASSWORD: str = "CambiarAdmin2026!"
+    INITIAL_BADER_PASSWORD: str = "CambiarBader2026!"
+    # URL pública/base para que los QR abran el sistema desde otro dispositivo.
+    PUBLIC_BASE_URL: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore"

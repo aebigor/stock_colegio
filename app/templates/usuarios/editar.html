@@ -1,0 +1,21 @@
+{% extends "layouts/base.html" %}
+{% block content %}
+<div class="page-header"><div><h1>Editar usuario</h1><p>Actualiza los datos, el acceso y el inventario que administra.</p></div></div>
+<form method="post" action="/usuarios/{{ usuario_editado.id }}/editar" class="card-panel">
+  <div class="row g-3">
+    <div class="col-md-6"><label class="form-label">Nombres</label><input class="form-control" name="nombre" maxlength="100" value="{{ usuario_editado.nombre }}" required></div>
+    <div class="col-md-6"><label class="form-label">Apellidos</label><input class="form-control" name="apellido" maxlength="100" value="{{ usuario_editado.apellido }}" required></div>
+    <div class="col-md-6"><label class="form-label">Correo</label><input class="form-control" type="email" name="correo" maxlength="150" value="{{ usuario_editado.correo }}" required></div>
+    <div class="col-md-6"><label class="form-label">Nombre de usuario</label><input class="form-control" name="usuario" minlength="3" maxlength="50" value="{{ usuario_editado.usuario }}" required></div>
+    <div class="col-md-6"><label class="form-label">Rol / Inventario</label>
+      <select class="form-select" name="rol_id" required {% if es_propio_usuario %}disabled{% endif %}>
+        {% for rol in roles %}<option value="{{ rol.id }}" {% if usuario_editado.rol_id == rol.id %}selected{% endif %}>{{ rol.nombre }}</option>{% endfor %}
+      </select>
+      {% if es_propio_usuario %}<input type="hidden" name="rol_id" value="{{ usuario_editado.rol_id }}"><small class="text-muted">Por seguridad no puedes cambiar tu propio rol.</small>{% endif %}
+      <small class="text-muted">El área se asigna automáticamente a partir del rol: Medios, Logística o ambas para Super Admin.</small>
+    </div>
+    <div class="col-md-6"><label class="form-label">Nueva contraseña (opcional)</label><input class="form-control" type="password" name="password" minlength="10" autocomplete="new-password"><small class="text-muted">Déjala vacía para conservar la actual. Si la cambias, mínimo 10 caracteres.</small></div>
+  </div>
+  <hr><button class="btn btn-primary" type="submit"><i class="bi bi-save"></i> Guardar cambios</button> <a href="/usuarios" class="btn btn-outline-secondary">Cancelar</a>
+</form>
+{% endblock %}

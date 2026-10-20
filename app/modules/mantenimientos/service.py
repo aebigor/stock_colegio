@@ -1,58 +1,27 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from .model import Mantenimiento
+from app.modules.activos.model import Activo
 
 
 class MantenimientoService:
-
     def __init__(self, db: Session):
-
         self.db = db
 
-    def listar(self):
+    def _query(self, area: str = "Todas"):
+        query = self.db.query(Mantenimiento).options(joinedload(Mantenimiento.activo_rel))
+        if area != "Todas":
+            query = query.filter(Mantenimiento.activo_rel.has(Activo.area == area))
+        return query
 
-        return (
+    def listar(self, area: str = "Todas"):
+        return self._query(area).order_by(Mantenimiento.created_at.desc()).all()
 
-            self.db.query(Mantenimiento)
+    def obtener(self, id: int, area: str = "Todas"):
+        return self._query(area).filter(Mantenimiento.id == id).first()
 
-            .order_by(Mantenimiento.created_at.desc())
+    def en_mantenimiento(self, area: str = "Todas"):
+        return self._query(area).filter(Mantenimiento.estado == "En mantenimiento").count()
 
-            .all()
-
-        )
-
-    def obtener(self, id: int):
-
-        return (
-
-            self.db.query(Mantenimiento)
-
-            .filter(Mantenimiento.id == id)
-
-            .first()
-
-        )
-
-    def en_mantenimiento(self):
-
-        return (
-
-            self.db.query(Mantenimiento)
-
-            .filter(Mantenimiento.estado == "En mantenimiento")
-
-            .count()
-
-        )
-
-    def finalizados(self):
-
-        return (
-
-            self.db.query(Mantenimiento)
-
-            .filter(Mantenimiento.estado == "Finalizado")
-
-            .count()
-
-        )
+    def finalizados(self, area: str = "Todas"):
+        return self._query(area).filter(Mantenimiento.estado == "Finalizado").count()

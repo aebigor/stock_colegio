@@ -46,7 +46,7 @@
             <div>
 
                 <h5>GIMSAU</h5>
-                <small>Stock Inventario</small>
+                <small>Inventario Escolar</small>
 
             </div>
 
@@ -151,6 +151,13 @@
 
             </span>
 
+            {% if request.state.user and request.state.user.rol and request.state.user.rol.nombre in ["Super Admin", "Superadministrador", "Administrador"] %}
+            <a href="/usuarios" class="menu-link">
+                <i class="bi bi-person-gear"></i>
+                <span>Usuarios</span>
+            </a>
+            {% endif %}
+
             <a href="/reportes" class="menu-link">
 
                 <i class="bi bi-bar-chart-fill"></i>
@@ -173,12 +180,9 @@
 
         <div class="logout">
 
-            <a href="/login">
-
+            <a href="/logout">
                 <i class="bi bi-box-arrow-right"></i>
-
-                <span>Cerar sesion</span>
-
+                <span>Cerrar sesión</span>
             </a>
 
         </div>
@@ -203,16 +207,14 @@
 
                 <div>
 
-                    <strong>Administrador</strong>
-
+                    <strong>{{ request.state.user.nombre }} {{ request.state.user.apellido }}</strong>
                     <br>
-
-                    <small>admin</small>
+                    <small>@{{ request.state.user.usuario }} · {{ request.state.user.area }}</small>
 
                 </div>
 
                 <img
-                    src="https://ui-avatars.com/api/?name=Administrador"
+                    src="https://ui-avatars.com/api/?name={{ request.state.user.nombre }}+{{ request.state.user.apellido }}"
                     class="avatar">
 
             </div>

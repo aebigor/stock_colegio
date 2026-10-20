@@ -11,14 +11,14 @@
         <h1>Dashboard de Reportes</h1>
 
         <p>
-            Estadísticas generales del inventario.
+            Resumen e historial de cambios. Área consultada: <strong>{{ area_filtro }}</strong>.
         </p>
 
     </div>
 
     <div class="acciones-reportes">
 
-        <a href="/reportes/excel" class="btn-primary">
+        <a href="/reportes/excel{% if area_filtro != 'Todas' %}?area={{ area_filtro }}{% endif %}" class="btn-primary">
 
             <i class="bi bi-file-earmark-excel"></i>
 
@@ -37,6 +37,13 @@
     </div>
 
 </div>
+
+{% if puede_ver_areas %}
+<form method="get" action="/reportes" class="card-panel mb-3 d-flex flex-wrap align-items-end gap-2">
+    <div><label class="form-label" for="area-reporte">Inventario a consultar</label><select id="area-reporte" name="area" class="form-select"><option value="Todas" {% if area_filtro == 'Todas' %}selected{% endif %}>Ambos inventarios</option><option value="Medios" {% if area_filtro == 'Medios' %}selected{% endif %}>Medios</option><option value="Logística" {% if area_filtro == 'Logística' %}selected{% endif %}>Logística</option></select></div>
+    <button type="submit" class="btn btn-primary">Ver informe</button>
+</form>
+{% endif %}
 
 <div class="stats-grid">
 
@@ -258,6 +265,23 @@
 
     </div>
 
+</div>
+
+<div class="card-panel mt-4">
+  <div class="panel-header"><h3><i class="bi bi-journal-text"></i> Historial reciente de cambios y bajas</h3><p>Registro de altas, ediciones, cambios de estado, desactivaciones y reactivaciones.</p></div>
+  <div class="table-responsive"><table class="table align-middle">
+    <thead><tr><th>Fecha</th><th>Área</th><th>Artículo</th><th>Movimiento</th><th>Usuario</th><th>Detalle</th></tr></thead>
+    <tbody>
+    {% for cambio in cambios_recientes %}<tr>
+      <td>{% if cambio.created_at %}{{ cambio.created_at.strftime("%d/%m/%Y %H:%M") }}{% else %}—{% endif %}</td>
+      <td>{{ cambio.area }}</td>
+      <td>{% if cambio.activo_rel %}<strong>{{ cambio.activo_rel.nombre }}</strong><br><small>{{ cambio.activo_rel.codigo_barras }}</small>{% else %}Artículo #{{ cambio.activo_id }}{% endif %}</td>
+      <td><span class="badge-info">{{ cambio.tipo }}</span><br><small>Estado: {{ cambio.estado }}</small></td>
+      <td>{{ cambio.usuario or 'Sistema' }}</td>
+      <td>{{ cambio.observaciones or '—' }}</td>
+    </tr>{% else %}<tr><td colspan="6" class="text-center">No hay cambios registrados todavía.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
 </div>
 
 <script>

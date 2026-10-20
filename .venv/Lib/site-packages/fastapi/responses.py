@@ -27,13 +27,13 @@ class _OrjsonModule(Protocol):
 try:
     ujson = cast(_UjsonModule, importlib.import_module("ujson"))
 except ModuleNotFoundError:  # pragma: nocover
-    ujson = None  # type: ignore[assignment]
+    ujson = None  # type: ignore  # ty: ignore[unused-ignore-comment]
 
 
 try:
     orjson = cast(_OrjsonModule, importlib.import_module("orjson"))
 except ModuleNotFoundError:  # pragma: nocover
-    orjson = None  # type: ignore[assignment]
+    orjson = None  # type: ignore  # ty: ignore[unused-ignore-comment]
 
 
 @deprecated(

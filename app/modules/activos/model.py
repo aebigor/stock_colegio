@@ -93,6 +93,15 @@ class Activo(Base):
         Text
     )
 
+    # Cada artículo pertenece a un único inventario: Medios o Logística.
+    area = Column(
+        String(50),
+        nullable=False,
+        default="Medios",
+        server_default="Medios",
+        index=True,
+    )
+
     activo = Column(
         Boolean,
         default=True

@@ -1,5 +1,4 @@
-from sqlalchemy.orm import Session
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import Session, joinedload
 
 from app.modules.activos.model import Activo
 from app.modules.activos.movimiento_model import Movimiento
@@ -7,133 +6,39 @@ from app.modules.categorias.model import Categoria
 
 
 class DashboardService:
-
-    def __init__(self, db: Session):
-
+    def __init__(self, db: Session, area: str = "Todas"):
         self.db = db
+        self.area = area
 
-    # =====================================
-    # TARJETAS
-    # =====================================
+    def _activos(self):
+        query = self.db.query(Activo)
+        if self.area != "Todas":
+            query = query.filter(Activo.area == self.area)
+        return query
 
     def total(self):
-
-        return self.db.query(Activo).count()
+        return self._activos().count()
 
     def disponibles(self):
-
-        return (
-
-            self.db.query(Activo)
-
-            .filter(
-                Activo.estado == "Disponible"
-            )
-
-            .count()
-
-        )
+        return self._activos().filter(Activo.estado == "Disponible", Activo.activo.is_(True)).count()
 
     def prestados(self):
-
-        return (
-
-            self.db.query(Activo)
-
-            .filter(
-                Activo.estado == "Prestado"
-            )
-
-            .count()
-
-        )
+        return self._activos().filter(Activo.estado == "Prestado", Activo.activo.is_(True)).count()
 
     def mantenimiento(self):
-
-        return (
-
-            self.db.query(Activo)
-
-            .filter(
-                Activo.estado == "Mantenimiento"
-            )
-
-            .count()
-
-        )
+        return self._activos().filter(Activo.estado == "Mantenimiento", Activo.activo.is_(True)).count()
 
     def baja(self):
-
-        return (
-
-            self.db.query(Activo)
-
-            .filter(
-                Activo.estado == "Baja"
-            )
-
-            .count()
-
-        )
+        return self._activos().filter(Activo.estado == "Baja").count()
 
     def categorias(self):
-
-        return self.db.query(Categoria).count()
-
-    # =====================================
-    # ÚLTIMOS MOVIMIENTOS
-    # =====================================
+        return self.db.query(Categoria).filter(Categoria.activo.is_(True)).count()
 
     def ultimos_movimientos(self):
-
-        return (
-
-            self.db.query(Movimiento)
-
-            .options(
-
-                joinedload(Movimiento.activo_rel),
-
-                joinedload(Movimiento.persona),
-
-                joinedload(Movimiento.ubicacion)
-
-            )
-
-            .order_by(
-
-                Movimiento.created_at.desc()
-
-            )
-
-            .limit(10)
-
-            .all()
-
-        )
-
-    # =====================================
-    # ACTIVOS EN MANTENIMIENTO
-    # =====================================
+        query = self.db.query(Movimiento).options(joinedload(Movimiento.activo_rel))
+        if self.area != "Todas":
+            query = query.filter(Movimiento.area == self.area)
+        return query.order_by(Movimiento.created_at.desc()).limit(10).all()
 
     def activos_mantenimiento(self):
-
-        return (
-
-            self.db.query(Activo)
-
-            .filter(
-
-                Activo.estado == "Mantenimiento"
-
-            )
-
-            .order_by(
-
-                Activo.nombre.asc()
-
-            )
-
-            .all()
-
-        )
+        return self._activos().filter(Activo.estado == "Mantenimiento").order_by(Activo.nombre.asc()).all()
