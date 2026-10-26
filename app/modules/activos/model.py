@@ -74,6 +74,23 @@ class Activo(TenantScoped, Base):
         nullable=False
     )
 
+    # Responsable institucional del activo (por ejemplo, el profesor encargado).
+    responsable_id = Column(
+        Integer,
+        ForeignKey("personas.id"),
+        nullable=True,
+        index=True,
+    )
+
+    # Persona que lo tiene físicamente en este momento. Puede ser distinta
+    # del responsable institucional (por ejemplo, un estudiante).
+    tenedor_id = Column(
+        Integer,
+        ForeignKey("personas.id"),
+        nullable=True,
+        index=True,
+    )
+
     marca = Column(
         String(100)
     )
@@ -134,6 +151,9 @@ class Activo(TenantScoped, Base):
     ubicacion = relationship(
         "Ubicacion"
     )
+
+    responsable = relationship("Persona", foreign_keys=[responsable_id])
+    tenedor = relationship("Persona", foreign_keys=[tenedor_id])
 
     movimientos = relationship(
         "Movimiento",

@@ -21,6 +21,7 @@ class MovimientoService:
             return None
 
         estado_anterior = activo.estado
+        ubicacion_origen_id = activo.ubicacion_id
         if datos.persona_id is not None:
             persona = self.db.query(Persona).filter(Persona.id == datos.persona_id).first()
             if persona is None:
@@ -32,7 +33,21 @@ class MovimientoService:
             activo.ubicacion_id = datos.ubicacion_id
         activo.estado = datos.estado
 
-        contenido = datos.model_dump(exclude={"area"})
+        # La responsabilidad institucional no se pierde cuando el activo
+        # pasa temporalmente a otra persona.
+        if datos.tipo == "Entrega" and datos.persona_id is not None:
+            if activo.responsable_id is None:
+                activo.responsable_id = datos.persona_id
+            activo.tenedor_id = datos.persona_id
+        elif datos.tipo in {"Devolución", "Devolucion"}:
+            activo.tenedor_id = None
+            # Una devolución normal conserva el responsable si todavía existe;
+            # la devolución masiva final puede liberarlo explícitamente.
+            if getattr(datos, "liberar_responsable", False):
+                activo.responsable_id = None
+
+        contenido = datos.model_dump(exclude={"area", "liberar_responsable"})
+        contenido["ubicacion_origen_id"] = datos.ubicacion_origen_id or ubicacion_origen_id
         contenido["area"] = activo.area
         contenido["usuario"] = usuario or datos.usuario or "Sistema"
         contenido["estado"] = activo.estado

@@ -10,6 +10,8 @@ class MovimientoBase(BaseModel):
 
     ubicacion_id: int | None = None
 
+    ubicacion_origen_id: int | None = None
+
     tipo: str
 
     estado: str
@@ -21,6 +23,10 @@ class MovimientoBase(BaseModel):
     usuario: str | None = None
 
     firma: str | None = None
+
+    protocolo_aceptado: bool = False
+
+    liberar_responsable: bool = False
 
     imagen: str | None = None
 

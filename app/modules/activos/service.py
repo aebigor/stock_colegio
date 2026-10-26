@@ -6,6 +6,7 @@ from .schema import ActivoCreate, ActivoUpdate
 from .movimiento_model import Movimiento
 from app.modules.categorias.model import Categoria
 from app.modules.ubicaciones.model import Ubicacion
+from app.modules.personas.model import Persona
 
 
 class ActivoService:
@@ -25,6 +26,7 @@ class ActivoService:
         categoria_id: int | None = None,
         estado: str | None = None,
         registro: str = "Todos",
+        ubicacion_id: int | None = None,
     ):
         query = self._aplicar_area(
             self.db.query(Activo).options(joinedload(Activo.categoria), joinedload(Activo.ubicacion)),
@@ -44,6 +46,8 @@ class ActivoService:
             query = query.filter(Activo.categoria_id == categoria_id)
         if estado and estado != "Todos":
             query = query.filter(Activo.estado == estado)
+        if ubicacion_id:
+            query = query.filter(Activo.ubicacion_id == ubicacion_id)
         if registro == "Activos":
             query = query.filter(Activo.activo.is_(True))
         elif registro == "Inactivos":
@@ -201,6 +205,50 @@ class ActivoService:
     def contar_mantenimiento(self, area: str = "Todas"):
         query = self._aplicar_area(self.db.query(Activo), area)
         return query.filter(Activo.estado == "Mantenimiento", Activo.activo.is_(True)).count()
+
+    def listar_disponibles_por_ubicacion(self, ubicacion_id: int, area: str = "Todas"):
+        query = self.db.query(Activo).options(
+            joinedload(Activo.categoria),
+            joinedload(Activo.ubicacion),
+            joinedload(Activo.responsable),
+            joinedload(Activo.tenedor),
+        ).filter(
+            Activo.ubicacion_id == ubicacion_id,
+            Activo.estado == "Disponible",
+            Activo.activo.is_(True),
+        )
+        return self._aplicar_area(query, area).order_by(Activo.nombre, Activo.id).all()
+
+    def listar_prestados_por_responsable(self, persona_id: int, area: str = "Todas"):
+        # Primero usa la responsabilidad persistente. Para activos entregados
+        # antes de esta mejora, hace fallback al último movimiento de entrega.
+        query = self.db.query(Activo).options(
+            joinedload(Activo.categoria),
+            joinedload(Activo.ubicacion),
+            joinedload(Activo.responsable),
+            joinedload(Activo.tenedor),
+        ).filter(
+            Activo.estado == "Prestado",
+            Activo.activo.is_(True),
+        )
+        activos = self._aplicar_area(query, area).order_by(Activo.nombre, Activo.id).all()
+        resultado = []
+        for activo in activos:
+            if activo.responsable_id == persona_id:
+                resultado.append(activo)
+                continue
+            entrega = self.ultima_entrega(activo.id)
+            if entrega is not None and entrega.persona_id == persona_id:
+                resultado.append(activo)
+        return resultado
+
+    def ultima_entrega(self, activo_id: int):
+        return (
+            self.db.query(Movimiento)
+            .filter(Movimiento.activo_id == activo_id, Movimiento.tipo == "Entrega")
+            .order_by(Movimiento.created_at.desc(), Movimiento.id.desc())
+            .first()
+        )
 
     def listar_categorias(self):
         return self.db.query(Categoria).filter(Categoria.activo.is_(True)).order_by(Categoria.nombre).all()

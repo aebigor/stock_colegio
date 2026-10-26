@@ -4,6 +4,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="reportes-page">
 
 
 <div class="page-header">
@@ -138,135 +139,35 @@
 </div>
 
 <div class="dashboard-grid">
-
     <div class="card-panel">
-
         <div class="panel-header">
-
-            <h3>
-
-                Equipos en mantenimiento
-
-            </h3>
-
+            <h3><i class="bi bi-geo-alt-fill"></i> Resumen por ubicación</h3>
+            <p>Inventario disponible, entregado, en mantenimiento y dado de baja por cada ubicación.</p>
         </div>
-
-        <table>
-
-            <thead>
-
-                <tr>
-
-                    <th>Código</th>
-
-                    <th>Equipo</th>
-
-                    <th>Estado</th>
-
-                </tr>
-
-            </thead>
-
-            <tbody>
-
-            {% for activo in activos_mantenimiento %}
-
-                <tr>
-
-                    <td>{{ activo.codigo_barras }}</td>
-
-                    <td>{{ activo.nombre }}</td>
-
-                    <td>
-
-                        <span class="badge-warning">
-
-                            En mantenimiento
-
-                        </span>
-
-                    </td>
-
-                </tr>
-
-            {% else %}
-
-                <tr>
-
-                    <td colspan="3">
-
-                        <center>
-
-                            No existen equipos en mantenimiento.
-
-                        </center>
-
-                    </td>
-
-                </tr>
-
-            {% endfor %}
-
-            </tbody>
-
-        </table>
-
+        <div class="table-responsive"><table>
+            <thead><tr><th>Ubicación</th><th>Área</th><th>Total</th><th>Disponible</th><th>Entregado</th><th>Mantenimiento</th><th>Baja</th></tr></thead>
+            <tbody>{% for ubicacion in resumen_ubicaciones %}<tr>
+                <td><strong>{{ ubicacion.nombre }}</strong></td><td>{{ ubicacion.area }}</td><td><strong>{{ ubicacion.total }}</strong></td><td><span class="report-badge report-success">{{ ubicacion.disponibles }}</span></td><td><span class="report-badge report-info">{{ ubicacion.prestados }}</span></td><td><span class="report-badge report-warning">{{ ubicacion.mantenimiento }}</span></td><td><span class="report-badge report-danger">{{ ubicacion.baja }}</span></td>
+            </tr>{% else %}<tr><td colspan="7" class="text-center">No hay información por ubicación.</td></tr>{% endfor %}</tbody>
+        </table></div>
     </div>
 
     <div class="card-panel">
-
         <div class="panel-header">
-
-            <h3>
-
-                Resumen por categoría
-
-            </h3>
-
+            <h3><i class="bi bi-pc-display"></i> Equipos en mantenimiento</h3>
         </div>
-
         <table>
-
-            <thead>
-
-                <tr>
-
-                    <th>Categoría</th>
-
-                    <th>Total</th>
-
-                </tr>
-
-            </thead>
-
-            <tbody>
-
-            {% for categoria in categorias %}
-
-                <tr>
-
-                    <td>{{ categoria[0] }}</td>
-
-                    <td>
-
-                        <strong>
-
-                            {{ categoria[1] }}
-
-                        </strong>
-
-                    </td>
-
-                </tr>
-
-            {% endfor %}
-
-            </tbody>
-
+            <thead><tr><th>Código</th><th>Equipo</th><th>Ubicación</th><th>Estado</th></tr></thead>
+            <tbody>{% for activo in activos_mantenimiento %}<tr><td>{{ activo.codigo_barras }}</td><td>{{ activo.nombre }}</td><td>{{ activo.ubicacion.nombre if activo.ubicacion else '—' }}</td><td><span class="badge-warning">En mantenimiento</span></td></tr>{% else %}<tr><td colspan="4" class="text-center">No existen equipos en mantenimiento.</td></tr>{% endfor %}</tbody>
         </table>
-
     </div>
+</div>
 
+<div class="card-panel mt-4">
+  <div class="panel-header"><h3><i class="bi bi-tags-fill"></i> Resumen por categoría</h3><p>Total de dispositivos, disponibles, en mantenimiento y dados de baja.</p></div>
+  <div class="table-responsive"><table><thead><tr><th>Categoría</th><th>Total</th><th>Disponibles</th><th>Prestados</th><th>Mantenimiento</th><th>Baja</th></tr></thead><tbody>
+  {% for categoria in categorias %}<tr><td><strong>{{ categoria[0] }}</strong></td><td>{{ categoria[1] or 0 }}</td><td><span class="report-badge report-success">{{ categoria[2] or 0 }}</span></td><td><span class="report-badge report-info">{{ categoria[3] or 0 }}</span></td><td><span class="report-badge report-warning">{{ categoria[4] or 0 }}</span></td><td><span class="report-badge report-danger">{{ categoria[5] or 0 }}</span></td></tr>{% else %}<tr><td colspan="6" class="text-center">No hay categorías con activos.</td></tr>{% endfor %}
+  </tbody></table></div>
 </div>
 
 <div class="card-panel mt-4">
@@ -308,7 +209,7 @@ const categorias=[
 
 nombre:"{{ categoria[0] }}",
 
-cantidad:{{ categoria[1] }}
+cantidad:{{ categoria[1] or 0 }}
 
 },
 

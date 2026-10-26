@@ -1,0 +1,168 @@
+{% extends "layouts/base.html" %}
+{% block extra_styles %}
+<link rel="stylesheet" href="/static/css/activos.css">
+<style>
+.bulk-hero{background:#172236;border:1px solid #26364e;border-radius:16px;padding:24px;margin-bottom:18px;color:#f8fafc}.bulk-hero h1{color:#fff;margin:0 0 8px}.bulk-hero p{color:#cbd5e1;margin:0}.bulk-summary{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.bulk-chip{background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:7px 11px;border-radius:999px}.operation-tabs{display:flex;gap:10px;margin-bottom:18px}.operation-tabs a{padding:10px 16px;border-radius:10px;text-decoration:none;border:1px solid #334155;color:#e2e8f0}.operation-tabs a.active{background:#2563eb;color:#fff;border-color:#2563eb}.bulk-card{background:#0f172a;border:1px solid #26364e;border-radius:14px;padding:20px}.bulk-label{color:#e2e8f0;font-weight:700;margin-bottom:7px;display:block}.bulk-help{color:#94a3b8;font-size:13px}.actor-note{padding:13px 15px;border-radius:10px;background:#0b1220;border:1px solid #293548;color:#cbd5e1}.actor-note strong{color:#fff}.asset-check{border:1px solid #334155;border-radius:12px;padding:14px;background:#111827;color:#f8fafc;display:block;height:100%}.asset-check:hover{border-color:#00e5ff;background:#142033}.asset-check.disabled{opacity:.55}.asset-check small{color:#aebccd}.asset-check .asset-status{display:inline-block;margin-top:7px;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700}.asset-status.disponible{background:#14532d;color:#bbf7d0}.asset-status.prestado{background:#713f12;color:#fef3c7}.asset-status.mantenimiento{background:#164e63;color:#cffafe}.asset-status.baja{background:#7f1d1d;color:#fecaca}.signature-wrap{border:2px dashed #334155;border-radius:12px;background:#0b1220;padding:8px}.signature-wrap canvas{width:100%;height:220px;display:block}.terms-box{background:#111827;border:1px solid #0ea5e9;border-radius:12px;padding:16px;color:#f8fafc}.terms-box p,.terms-box small{color:#cbd5e1}.terms-box a{font-weight:700;color:#67e8f9;text-decoration:underline}.section-title{color:#fff}.invalid-note{color:#fca5a5!important}
+</style>
+{% endblock %}
+{% block content %}
+<div class="bulk-hero">
+  <h1><i class="bi bi-box-seam"></i> Entrega y devolución masiva</h1>
+  <p>Primero se registra la ubicación de origen. Después se asignan varios activos a una persona con una sola firma.</p>
+  <div class="bulk-summary">
+    <span class="bulk-chip">Área: {{ area }}</span>
+    {% if operacion == 'Entrega' and ubicacion %}<span class="bulk-chip">Bodega: {{ ubicacion.nombre }}</span>{% endif %}
+    {% if operacion == 'Devolucion' and persona %}<span class="bulk-chip">Responsable: {{ persona.nombre }}</span>{% endif %}
+    <span class="bulk-chip">{{ activos|length }} activos encontrados</span>
+  </div>
+</div>
+
+<div class="operation-tabs">
+  <a class="{% if operacion == 'Entrega' %}active{% endif %}" href="/activos/entrega-masiva?operacion=Entrega"><i class="bi bi-box-arrow-up"></i> Entrega masiva</a>
+  <a class="{% if operacion == 'Devolucion' %}active{% endif %}" href="/activos/entrega-masiva?operacion=Devolucion"><i class="bi bi-box-arrow-in-down"></i> Devolución masiva</a>
+</div>
+
+{% if operacion == 'Entrega' %}
+<div class="bulk-card">
+  <form method="get" action="/activos/entrega-masiva" class="row g-3 align-items-end">
+    <input type="hidden" name="operacion" value="Entrega">
+    <div class="col-lg-4">
+      <label class="bulk-label">1. Ubicación de origen *</label>
+      <select name="ubicacion_id" class="form-select" required>
+        <option value="">Seleccione la ubicación...</option>
+        {% for item in ubicaciones %}<option value="{{ item.id }}" {% if ubicacion and ubicacion.id == item.id %}selected{% endif %}>{{ item.nombre }}{% if item.sede %} · {{ item.sede }}{% endif %}</option>{% endfor %}
+      </select>
+      <small class="bulk-help">Aquí están físicamente los activos antes de la entrega.</small>
+    </div>
+    <div class="col-lg-4">
+      <label class="bulk-label">2. Ubicación donde quedarán *</label>
+      <select name="ubicacion_destino_id" class="form-select" required>
+        <option value="">Seleccione la ubicación destino...</option>
+        {% for item in ubicaciones %}<option value="{{ item.id }}" {% if ubicacion_destino and ubicacion_destino.id == item.id %}selected{% endif %}>{{ item.nombre }}{% if item.sede %} · {{ item.sede }}{% endif %}</option>{% endfor %}
+      </select>
+      <small class="bulk-help">La ubicación se conserva incluso cuando el activo queda prestado al responsable.</small>
+    </div>
+    <div class="col-lg-2"><button class="btn btn-primary w-100" type="submit">Ver activos</button></div>
+  </form>
+</div>
+{% else %}
+<div class="bulk-card">
+  <form method="get" action="/activos/entrega-masiva" class="row g-3 align-items-end">
+    <input type="hidden" name="operacion" value="Devolucion">
+    <div class="col-lg-6">
+      <label class="bulk-label">1. Persona que devuelve *</label>
+      <select name="persona_id" class="form-select" required>
+        <option value="">Seleccione al profesor o responsable...</option>
+        {% for item in personas %}<option value="{{ item.id }}" {% if persona_id == item.id %}selected{% endif %}>{{ item.nombre }}{% if item.cargo %} · {{ item.cargo }}{% endif %}</option>{% endfor %}
+      </select>
+      <small class="bulk-help">La ubicación no se pide nuevamente porque el sistema la conserva en el movimiento de entrega.</small>
+    </div>
+    <div class="col-lg-2"><button class="btn btn-primary w-100" type="submit">Ver préstamos</button></div>
+  </form>
+</div>
+{% endif %}
+
+{% if (operacion == 'Entrega' and ubicacion) or (operacion == 'Devolucion' and persona) %}
+<form method="post" action="/activos/entrega-masiva" class="bulk-card mt-3" id="bulkForm">
+  <input type="hidden" name="operacion" value="{{ operacion }}">
+  {% if ubicacion %}<input type="hidden" name="ubicacion_id" value="{{ ubicacion.id }}">{% endif %}
+  {% if ubicacion_destino %}<input type="hidden" name="ubicacion_destino_id" value="{{ ubicacion_destino.id }}">{% endif %}
+  <div class="actor-note mb-4">
+    <strong>Usuario que registra la operación:</strong> {{ usuario_actual }} · {{ usuario_actual_area }}
+    <br><small>Se toma automáticamente de la cuenta que está diligenciando el formulario. No hay un "Coordinador de Medios" fijo.</small>
+  </div>
+
+  <div class="row g-3">
+    {% if operacion == 'Entrega' %}
+    <div class="col-lg-6">
+      <label class="bulk-label">3. Persona responsable que recibe *</label>
+      <select name="persona_id" class="form-select" required>
+        <option value="">Seleccione al profesor o responsable...</option>
+        {% for item in personas %}<option value="{{ item.id }}">{{ item.nombre }}{% if item.cargo %} · {{ item.cargo }}{% endif %}</option>{% endfor %}
+      </select>
+      <small class="bulk-help">Esta persona quedará como responsable de todos los activos seleccionados.</small>
+    </div>
+    <div class="col-lg-6">
+      <label class="bulk-label">4. Persona que entrega <span class="text-muted">(opcional)</span></label>
+      <select name="persona_operacion_id" class="form-select">
+        <option value="">No especificar / usar usuario que registra</option>
+        {% for item in personas %}<option value="{{ item.id }}">{{ item.nombre }}{% if item.cargo %} · {{ item.cargo }}{% endif %}</option>{% endfor %}
+      </select>
+    </div>
+    {% else %}
+    <div class="col-lg-6">
+      <label class="bulk-label">2. Persona responsable que devuelve *</label>
+      <input type="text" class="form-control" value="{{ persona.nombre }}{% if persona.cargo %} · {{ persona.cargo }}{% endif %}" readonly>
+      <input type="hidden" name="persona_id" value="{{ persona.id }}">
+      <small class="bulk-help">Estos son los activos que actualmente aparecen prestados a esta persona.</small>
+    </div>
+    <div class="col-lg-6">
+      <label class="bulk-label">3. Persona que recibe <span class="text-muted">(opcional)</span></label>
+      <select name="persona_operacion_id" class="form-select">
+        <option value="">No especificar / usar usuario que registra</option>
+        {% for item in personas %}<option value="{{ item.id }}">{{ item.nombre }}{% if item.cargo %} · {{ item.cargo }}{% endif %}</option>{% endfor %}
+      </select>
+    </div>
+    {% endif %}
+  </div>
+
+  <h3 class="section-title mt-4">{{ '5' if operacion == 'Entrega' else '3' }}. Activos</h3>
+  <p class="bulk-help">{% if operacion == 'Entrega' %}Marca los activos que salen de <strong>{{ ubicacion.nombre }}</strong>. Quedarán registrados como <strong>Prestados</strong>, bajo responsabilidad de <strong>{{ persona.nombre if persona else 'la persona seleccionada' }}</strong>, y su ubicación actual será <strong>{{ ubicacion_destino.nombre if ubicacion_destino else 'la ubicación destino' }}</strong>.{% else %}Se muestran todos los activos <strong>Prestados</strong> que siguen bajo responsabilidad de <strong>{{ persona.nombre }}</strong>, aunque temporalmente los tenga otra persona. Al devolverlos, se liberará la responsabilidad y volverán a quedar disponibles en su ubicación actual registrada.{% endif %}</p>
+
+  <div class="row g-3">
+  {% for activo in activos %}
+    <div class="col-md-6 col-xl-4">
+      <label class="asset-check">
+        <input class="form-check-input me-2 asset-selector" type="checkbox" name="activo_ids" value="{{ activo.id }}">
+        <strong>{{ activo.nombre }}</strong><br>
+        <small>{{ activo.codigo_barras }} · {{ activo.categoria.nombre if activo.categoria else 'Sin categoría' }}</small><br>
+        {% if activo.ubicacion %}<small>Ubicación: {{ activo.ubicacion.nombre }}</small><br>{% endif %}
+        {% if activo.responsable %}<small>Responsable: {{ activo.responsable.nombre }}</small><br>{% endif %}
+        <span class="asset-status {{ activo.estado|lower|replace('ó','o')|replace('í','i')|replace('é','e') }}">{{ activo.estado }}</span>
+        {% if operacion == 'Devolucion' %}
+        <br><small>Ubicación actual: {{ activo.ubicacion.nombre if activo.ubicacion else 'Sin ubicación' }}</small>
+        {% if activo.tenedor and activo.tenedor.id != activo.responsable_id %}<br><small>Lo tiene actualmente: {{ activo.tenedor.nombre }}</small>{% endif %}
+        {% endif %}
+      </label>
+    </div>
+  {% else %}
+    <div class="col-12"><div class="alert alert-info">{% if operacion == 'Entrega' %}No hay activos disponibles físicamente en esta ubicación de origen.{% else %}Esta persona no tiene activos prestados actualmente bajo su responsabilidad.{% endif %}</div></div>
+  {% endfor %}
+  </div>
+
+  {% if activos %}
+  <div class="mt-3 d-flex gap-2 flex-wrap">
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="seleccionarValidos(true)">Seleccionar todos</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="seleccionarValidos(false)">Quitar selección</button>
+  </div>
+
+  <div class="form-group mt-4"><label class="bulk-label">Observaciones</label><textarea name="observaciones" rows="4" class="form-control" placeholder="Observaciones generales de la operación..."></textarea></div>
+
+  <h3 class="section-title mt-4">Firma de {{ 'quien recibe los activos' if operacion == 'Entrega' else 'quien devuelve los activos' }}</h3>
+  <p class="bulk-help">La firma queda guardada en el historial de cada activo seleccionado.</p>
+  <div class="signature-wrap"><canvas id="signature-pad" width="900" height="250"></canvas></div>
+  <input type="hidden" name="firma" id="firma">
+  <div class="mt-3 d-flex gap-2 flex-wrap">
+    <button type="button" class="btn btn-outline-secondary" id="limpiarFirma">Limpiar firma</button>
+    <button type="submit" class="btn btn-primary"><i class="bi bi-check-circle"></i> Registrar {{ 'entrega' if operacion == 'Entrega' else 'devolución' }} masiva</button>
+    <a href="/activos" class="btn btn-outline-secondary">Cancelar</a>
+  </div>
+  {% endif %}
+</form>
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+<script>
+function seleccionarValidos(marcar){document.querySelectorAll('.asset-selector').forEach(x=>x.checked=marcar);}
+const canvas=document.getElementById('signature-pad');
+if(canvas){
+  const pad=new SignaturePad(canvas);
+  document.getElementById('limpiarFirma').addEventListener('click',()=>pad.clear());
+  document.getElementById('bulkForm').addEventListener('submit',e=>{
+    if(pad.isEmpty()){e.preventDefault();alert('Debes registrar la firma antes de continuar.');return;}
+    if(!document.querySelectorAll('.asset-selector:checked').length){e.preventDefault();alert('Selecciona al menos un activo.');return;}
+    document.getElementById('firma').value=pad.toDataURL();
+  });
+}
+</script>
+{% endblock %}

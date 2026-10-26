@@ -13,7 +13,7 @@ class ActivoBase(BaseModel):
 
     categoria_id: int
 
-    ubicacion_id: int
+    ubicacion_id: int | None = None
 
     marca: str | None = None
 

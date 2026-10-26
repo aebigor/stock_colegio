@@ -37,7 +37,16 @@ class Movimiento(TenantScoped, Base):
         nullable=True
     )
 
+    # Ubicación actual/destino después del movimiento.
     ubicacion_id = Column(
+        Integer,
+        ForeignKey("ubicaciones.id"),
+        nullable=True
+    )
+
+    # Ubicación física desde la que salió el activo. Permite reconstruir
+    # el origen aunque después se traslade a otra ubicación.
+    ubicacion_origen_id = Column(
         Integer,
         ForeignKey("ubicaciones.id"),
         nullable=True
@@ -70,6 +79,13 @@ class Movimiento(TenantScoped, Base):
         Text
     )
 
+    protocolo_aceptado = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
+
     imagen = Column(
         String(255)
     )
@@ -96,4 +112,6 @@ class Movimiento(TenantScoped, Base):
 
     persona = relationship("Persona")
 
-    ubicacion = relationship("Ubicacion")
+    ubicacion = relationship("Ubicacion", foreign_keys=[ubicacion_id])
+
+    ubicacion_origen = relationship("Ubicacion", foreign_keys=[ubicacion_origen_id])

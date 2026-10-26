@@ -39,6 +39,10 @@ class Categoria(TenantScoped, Base):
 
     requiere_firma = Column(Boolean, default=False)
 
+    # Si está activo, al registrar una ENTREGA de esta categoría
+    # se debe mostrar el protocolo tecnológico y aceptar sus términos.
+    requiere_protocolo = Column(Boolean, default=False, nullable=False)
+
     requiere_mantenimiento = Column(Boolean, default=False)
 
     genera_qr = Column(Boolean, default=True)

@@ -28,6 +28,8 @@ class CategoriaBase(BaseModel):
 
     requiere_firma: bool = False
 
+    requiere_protocolo: bool = False
+
     requiere_mantenimiento: bool = False
 
     genera_qr: bool = True

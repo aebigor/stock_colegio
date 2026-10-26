@@ -36,6 +36,7 @@ def index(request: Request, area: str | None = None, db: Session = Depends(get_d
             "mantenimiento": service.mantenimiento(),
             "baja": service.baja(),
             "categorias": service.categorias(),
+            "resumen_ubicaciones": service.resumen_ubicaciones(),
             "activos_mantenimiento": service.activos_mantenimiento(),
             "cambios_recientes": service.cambios_recientes(),
             "area_filtro": scope_area,

@@ -39,6 +39,7 @@ def index(
     categoria_id: str | None = None,
     estado: str = "Todos",
     registro: str = "Todos",
+    ubicacion_id: str | None = None,
     area: str | None = None,
     db: Session = Depends(get_db),
     user: Usuario = Depends(get_current_user),
@@ -55,7 +56,13 @@ def index(
         estado = "Todos"
     if registro not in {"Todos", "Activos", "Inactivos"}:
         registro = "Todos"
-    activos = service.listar(scope_area, q, categoria_id_int, estado, registro)
+    ubicacion_id_int = None
+    if ubicacion_id and ubicacion_id.strip():
+        try:
+            ubicacion_id_int = int(ubicacion_id.strip())
+        except ValueError:
+            ubicacion_id_int = None
+    activos = service.listar(scope_area, q, categoria_id_int, estado, registro, ubicacion_id_int)
     return templates.TemplateResponse(
         request=request,
         name="activos/index.html",
@@ -66,8 +73,10 @@ def index(
             "prestados": service.contar_prestados(scope_area),
             "mantenimiento": service.contar_mantenimiento(scope_area),
             "categorias": CategoriaService(db).listar(estado="Activas"),
+            "ubicaciones": UbicacionService(db).listar(scope_area),
             "q": q,
             "categoria_id": categoria_id_int,
+            "ubicacion_id": ubicacion_id_int,
             "estado_filtro": estado,
             "registro_filtro": registro,
             "area_filtro": scope_area,
@@ -125,6 +134,211 @@ def guardar(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return RedirectResponse(url="/activos", status_code=303)
 
+
+
+@router.get("/entrega-masiva", response_class=HTMLResponse)
+def entrega_masiva(
+    request: Request,
+    ubicacion_id: int | None = None,
+    ubicacion_destino_id: int | None = None,
+    operacion: str = "Entrega",
+    persona_id: int | None = None,
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(get_current_user),
+):
+    area = user_area(user)
+    if operacion not in {"Entrega", "Devolucion"}:
+        operacion = "Entrega"
+
+    ubicaciones = UbicacionService(db).listar(area)
+    personas = PersonaService(db).listar()
+    activos = []
+    ubicacion = None
+    ubicacion_destino = None
+    persona = None
+
+    if operacion == "Entrega":
+        if ubicacion_id:
+            ubicacion = UbicacionService(db).obtener(ubicacion_id, area)
+            if ubicacion is not None:
+                activos = ActivoService(db).listar_disponibles_por_ubicacion(ubicacion.id, area)
+        if ubicacion_destino_id:
+            ubicacion_destino = UbicacionService(db).obtener(ubicacion_destino_id, area)
+        if persona_id:
+            persona = PersonaService(db).obtener(persona_id)
+    else:
+        if persona_id:
+            persona = PersonaService(db).obtener(persona_id)
+            if persona is not None:
+                # La devolución anual se hace sobre TODO lo asignado al responsable,
+                # aunque temporalmente lo tenga otra persona (ej. un estudiante).
+                activos = ActivoService(db).listar_prestados_por_responsable(persona.id, area)
+
+    nombre_usuario = " ".join(
+        parte for parte in [getattr(user, "nombre", ""), getattr(user, "apellido", "")] if parte
+    ).strip() or user.usuario
+
+    return templates.TemplateResponse(
+        request=request,
+        name="activos/entrega_masiva.html",
+        context={
+            "title": "Entrega y devolución masiva",
+            "ubicaciones": ubicaciones,
+            "personas": personas,
+            "activos": activos,
+            "ubicacion": ubicacion,
+            "ubicacion_destino": ubicacion_destino,
+            "ubicacion_destino_id": ubicacion_destino_id,
+            "persona": persona,
+            "persona_id": persona_id,
+            "operacion": operacion,
+            "area": area,
+            "usuario_actual": nombre_usuario,
+            "usuario_actual_area": area if area != "Todas" else "Super Admin",
+        },
+    )
+
+
+@router.get("/protocolo-tecnologia", response_class=HTMLResponse)
+def protocolo_tecnologia(request: Request, user: Usuario = Depends(get_current_user)):
+    return templates.TemplateResponse(
+        request=request,
+        name="activos/protocolo_tecnologia.html",
+        context={"title": "Protocolo para préstamo y uso de dispositivos tecnológicos"},
+    )
+
+
+@router.post("/entrega-masiva")
+def guardar_entrega_masiva(
+    ubicacion_id: int | None = Form(None),
+    ubicacion_destino_id: int | None = Form(None),
+    persona_id: int = Form(...),
+    activo_ids: list[int] = Form(...),
+    firma: str = Form(""),
+    operacion: str = Form("Entrega"),
+    persona_operacion_id: int | None = Form(None),
+    observaciones: str = Form(""),
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(get_current_user),
+):
+    if operacion not in {"Entrega", "Devolucion"}:
+        raise HTTPException(status_code=400, detail="Operación no válida.")
+    if not firma or firma == "data: ," or firma == "data:,":
+        raise HTTPException(status_code=400, detail="La firma es obligatoria.")
+
+    area = user_area(user)
+    persona = PersonaService(db).obtener(persona_id)
+    if persona is None:
+        raise HTTPException(status_code=400, detail="La persona responsable no es válida.")
+
+    ubicacion_origen = None
+    ubicacion_destino = None
+    if operacion == "Entrega":
+        if not ubicacion_id:
+            raise HTTPException(status_code=400, detail="Debes seleccionar la ubicación de origen.")
+        if not ubicacion_destino_id:
+            raise HTTPException(status_code=400, detail="Debes seleccionar la ubicación donde quedarán los activos.")
+        ubicacion_origen = UbicacionService(db).obtener(ubicacion_id, area)
+        ubicacion_destino = UbicacionService(db).obtener(ubicacion_destino_id, area)
+        if ubicacion_origen is None:
+            raise HTTPException(status_code=400, detail="La ubicación de origen no es válida.")
+        if ubicacion_destino is None:
+            raise HTTPException(status_code=400, detail="La ubicación de destino no es válida.")
+
+    persona_operacion = PersonaService(db).obtener(persona_operacion_id) if persona_operacion_id else None
+    if persona_operacion_id and persona_operacion is None:
+        raise HTTPException(status_code=400, detail="La persona indicada para realizar la operación no es válida.")
+
+    service = ActivoService(db)
+    procesados = 0
+    nombre_usuario = " ".join(
+        parte for parte in [getattr(user, "nombre", ""), getattr(user, "apellido", "")] if parte
+    ).strip() or user.usuario
+
+    for activo_id in dict.fromkeys(activo_ids):
+        activo = service.obtener(activo_id, area)
+        if activo is None or not activo.activo:
+            continue
+
+        if operacion == "Entrega":
+            if activo.estado != "Disponible" or activo.ubicacion_id != ubicacion_origen.id:
+                continue
+            origen_id = activo.ubicacion_id
+            destino_id = ubicacion_destino.id
+            nuevo_estado = "Prestado"
+            tipo = "Entrega"
+            etiqueta_persona = "Entregado por"
+            liberar_responsable = False
+            persona_movimiento = persona.id
+            partes = [
+                "Entrega masiva.",
+                f"Responsable institucional: {persona.nombre}.",
+                f"Ubicación de origen: {ubicacion_origen.nombre}.",
+                f"Ubicación destino: {ubicacion_destino.nombre}.",
+                f"Registrado por: {nombre_usuario}.",
+            ]
+        else:
+            if activo.estado != "Prestado":
+                continue
+            responsable_valido = activo.responsable_id == persona.id
+            if not responsable_valido:
+                ultima_entrega = service.ultima_entrega(activo.id)
+                responsable_valido = ultima_entrega is not None and ultima_entrega.persona_id == persona.id
+            if not responsable_valido:
+                continue
+            origen_id = activo.ubicacion_id
+            destino_id = activo.ubicacion_id
+            nuevo_estado = "Disponible"
+            tipo = "Devolucion"
+            etiqueta_persona = "Recibido por"
+            liberar_responsable = True
+            persona_movimiento = persona.id
+            partes = [
+                "Devolución masiva.",
+                f"Responsable que devuelve: {persona.nombre}.",
+                f"Ubicación de retorno: {activo.ubicacion.nombre if activo.ubicacion else 'Sin ubicación'}.",
+                f"Registrado por: {nombre_usuario}.",
+            ]
+
+        if persona_operacion:
+            partes.append(f"{etiqueta_persona}: {persona_operacion.nombre}.")
+        else:
+            partes.append(f"{etiqueta_persona}: {nombre_usuario}.")
+        if observaciones.strip():
+            partes.append(observaciones.strip())
+
+        datos = MovimientoCreate(
+            activo_id=activo.id,
+            persona_id=persona_movimiento,
+            ubicacion_id=destino_id,
+            ubicacion_origen_id=origen_id,
+            tipo=tipo,
+            estado=nuevo_estado,
+            estado_entrega="Recibido y firmado",
+            observaciones=" ".join(partes),
+            usuario=nombre_usuario,
+            firma=firma,
+            area=activo.area,
+            liberar_responsable=liberar_responsable,
+        )
+        movimiento = MovimientoService(db).crear(datos, area=area, usuario=nombre_usuario)
+        if movimiento:
+            procesados += 1
+
+    if not procesados:
+        if operacion == "Entrega":
+            raise HTTPException(status_code=400, detail="No se encontraron activos disponibles en la ubicación de origen seleccionada.")
+        raise HTTPException(status_code=400, detail="No se encontraron activos prestados bajo la responsabilidad de esa persona.")
+
+    if operacion == "Entrega":
+        return RedirectResponse(
+            url=f"/activos/entrega-masiva?ubicacion_id={ubicacion_origen.id}&ubicacion_destino_id={ubicacion_destino.id}&operacion=Entrega",
+            status_code=303,
+        )
+    return RedirectResponse(
+        url=f"/activos/entrega-masiva?persona_id={persona.id}&operacion=Devolucion",
+        status_code=303,
+    )
 
 @router.get("/{activo_id}/detalle")
 def detalle(activo_id: int, request: Request, db: Session = Depends(get_db), user: Usuario = Depends(get_current_user)):
@@ -264,10 +478,17 @@ def movimiento(activo_id: int, request: Request, db: Session = Depends(get_db), 
     activo = ActivoService(db).obtener(activo_id, user_area(user))
     if activo is None:
         _not_found()
+    requiere_protocolo = bool(getattr(activo.categoria, "requiere_protocolo", False))
     return templates.TemplateResponse(
         request=request,
         name="activos/movimiento.html",
-        context={"title": "Registrar movimiento", "activo": activo, "personas": PersonaService(db).listar(), "ubicaciones": UbicacionService(db).listar(activo.area)},
+        context={
+            "title": "Registrar movimiento",
+            "activo": activo,
+            "personas": PersonaService(db).listar(),
+            "ubicaciones": UbicacionService(db).listar(activo.area),
+            "requiere_protocolo": requiere_protocolo,
+        },
     )
 
 
@@ -278,14 +499,35 @@ def guardar_movimiento(
     ubicacion_id: int | None = Form(None),
     tipo: str = Form(...),
     observaciones: str = Form(""),
+    firma: str = Form(""),
+    acepto_protocolo: str | None = Form(None),
     db: Session = Depends(get_db),
     user: Usuario = Depends(get_current_user),
 ):
     estados = {"Entrega": "Prestado", "Mantenimiento": "Mantenimiento", "Baja": "Baja", "Devolución": "Disponible", "Devolucion": "Disponible", "Ajuste": "Disponible", "Disponible": "Disponible", "Ingreso a bodega": "Disponible", "Salida Mantenimiento": "Disponible"}
     if tipo not in estados:
         raise HTTPException(status_code=400, detail="Tipo de movimiento no válido.")
-    if ActivoService(db).obtener(activo_id, user_area(user)) is None:
+    if tipo == "Entrega" and not ubicacion_id:
+        raise HTTPException(status_code=400, detail="Para una entrega debes indicar la ubicación donde quedará el activo.")
+    activo = ActivoService(db).obtener(activo_id, user_area(user))
+    if activo is None:
         _not_found()
+
+    requiere_protocolo = bool(getattr(activo.categoria, "requiere_protocolo", False))
+    protocolo_aceptado = False
+    if tipo == "Entrega" and requiere_protocolo:
+        if acepto_protocolo != "on":
+            raise HTTPException(
+                status_code=400,
+                detail="Debes leer y aceptar el protocolo tecnológico antes de registrar la entrega.",
+            )
+        if not firma or firma == "data:,":
+            raise HTTPException(
+                status_code=400,
+                detail="La firma de quien recibe el dispositivo es obligatoria para esta entrega.",
+            )
+        protocolo_aceptado = True
+
     datos = MovimientoCreate(
         activo_id=activo_id,
         persona_id=persona_id,
@@ -294,7 +536,10 @@ def guardar_movimiento(
         estado=estados[tipo],
         observaciones=observaciones,
         usuario=user.usuario,
-        area=user_area(user) if user_area(user) != "Todas" else "Medios",
+        firma=firma or None,
+        protocolo_aceptado=protocolo_aceptado,
+        estado_entrega="Protocolo aceptado y firmado" if protocolo_aceptado else None,
+        area=user_area(user) if user_area(user) != "Todas" else activo.area,
     )
     movimiento = MovimientoService(db).crear(datos, area=user_area(user), usuario=user.usuario)
     if movimiento is None:
