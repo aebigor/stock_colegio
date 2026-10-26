@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.templates import templates
-from app.modules.auth.dependencies import get_current_user, user_area, area_permitida
+from app.modules.auth.dependencies import get_current_user, require_super_admin, user_area, area_permitida
 from app.modules.auth.models import Usuario
 from .schema import UbicacionCreate, UbicacionUpdate
 from .service import UbicacionService
@@ -32,7 +32,7 @@ def index(
     db: Session = Depends(get_db),
     user: Usuario = Depends(get_current_user),
 ):
-    scope = _scope(user, area)
+    scope = "Todas"
     return templates.TemplateResponse(
         request=request,
         name="ubicaciones/index.html",
@@ -46,7 +46,9 @@ def index(
 
 
 @router.get("/crear")
-def crear_formulario(request: Request, user: Usuario = Depends(get_current_user)):
+def crear_formulario(request: Request, user: Usuario = Depends(get_current_user),
+    _actor = Depends(require_super_admin)
+):
     scope = user_area(user)
     return templates.TemplateResponse(
         request=request,
@@ -72,6 +74,8 @@ def guardar(
     area: str | None = Form(None),
     db: Session = Depends(get_db),
     user: Usuario = Depends(get_current_user),
+
+    _actor = Depends(require_super_admin)
 ):
     area_objetivo = area_permitida(user, area)
     datos = UbicacionCreate(
@@ -92,6 +96,8 @@ def editar(
     request: Request,
     db: Session = Depends(get_db),
     user: Usuario = Depends(get_current_user),
+
+    _actor = Depends(require_super_admin)
 ):
     ubicacion = UbicacionService(db).obtener(ubicacion_id, user_area(user))
     if ubicacion is None:
@@ -120,6 +126,8 @@ def actualizar(
     area: str | None = Form(None),
     db: Session = Depends(get_db),
     user: Usuario = Depends(get_current_user),
+
+    _actor = Depends(require_super_admin)
 ):
     service = UbicacionService(db)
     actual = service.obtener(ubicacion_id, user_area(user))
@@ -145,6 +153,8 @@ def cambiar_estado(
     ubicacion_id: int,
     db: Session = Depends(get_db),
     user: Usuario = Depends(get_current_user),
+
+    _actor = Depends(require_super_admin)
 ):
     actualizada = UbicacionService(db).cambiar_estado(ubicacion_id, user_area(user))
     if actualizada is None:

@@ -5,7 +5,7 @@
 {% block content %}
 <div class="page-header">
   <div><h1>Categorías</h1><p>Filtra y administra los tipos de activos del colegio.</p></div>
-  <a href="/categorias/crear" class="btn-primary"><i class="bi bi-plus-circle"></i> Nueva categoría</a>
+  {% if request.state.user.rol and request.state.user.rol.nombre in ["Super Admin", "Superadministrador"] %}<a href="/categorias/crear" class="btn-primary"><i class="bi bi-plus-circle"></i> Nueva categoría</a>{% endif %}
 </div>
 <div class="card-panel">
   <form class="row g-2 align-items-end mb-3" method="get" action="/categorias">
@@ -20,7 +20,7 @@
       <td>{{ categoria.id }}</td><td><i class="bi {{ categoria.icono }}" style="color:{{ categoria.color }}"></i></td><td><strong>{{ categoria.nombre }}</strong><br><small>{{ categoria.descripcion or '' }}</small></td><td><code>{{ categoria.prefijo }}</code></td>
       <td>{{ 'Sí' if categoria.permite_prestamo else 'No' }}</td><td>{{ 'Sí' if categoria.requiere_firma else 'No' }}</td>
       <td>{% if categoria.activo %}<span class="badge-success">Activa</span>{% else %}<span class="badge-danger">Inactiva</span>{% endif %}</td>
-      <td><div class="d-flex gap-2"><a class="btn btn-sm btn-outline-primary" href="/categorias/{{ categoria.id }}/editar" title="Editar"><i class="bi bi-pencil"></i></a><form method="post" action="/categorias/{{ categoria.id }}/estado"><button class="btn btn-sm btn-outline-secondary" type="submit">{% if categoria.activo %}Desactivar{% else %}Activar{% endif %}</button></form></div></td>
+      <td>{% if request.state.user.rol and request.state.user.rol.nombre in ["Super Admin", "Superadministrador"] %}<div class="d-flex gap-2"><a class="btn btn-sm btn-outline-primary" href="/categorias/{{ categoria.id }}/editar" title="Editar"><i class="bi bi-pencil"></i></a><form method="post" action="/categorias/{{ categoria.id }}/estado"><button class="btn btn-sm btn-outline-secondary" type="submit">{% if categoria.activo %}Desactivar{% else %}Activar{% endif %}</button></form></div>{% else %}<span class="text-muted">Solo consulta</span>{% endif %}</td>
     </tr>{% else %}<tr><td colspan="8" class="text-center py-4">No hay categorías que coincidan con los filtros.</td></tr>{% endfor %}
     </tbody>
   </table></div>

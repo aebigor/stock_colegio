@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.templates import templates
-from app.modules.auth.dependencies import get_current_user
+from app.modules.auth.dependencies import get_current_user, require_super_admin
 from .schema import CategoriaCreate, CategoriaUpdate
 from .service import CategoriaService
 
@@ -20,7 +20,8 @@ def index(request: Request, q: str = "", estado: str = "Todas", db: Session = De
 
 
 @router.get("/crear")
-def crear(request: Request):
+def crear(request: Request, _actor = Depends(require_super_admin)):
+
     return templates.TemplateResponse(request=request, name="categorias/crear.html", context={"title": "Nueva categoría"})
 
 
@@ -46,7 +47,7 @@ def guardar(
 
 
 @router.get("/{categoria_id}/editar")
-def editar(categoria_id: int, request: Request, db: Session = Depends(get_db)):
+def editar(categoria_id: int, request: Request, db: Session = Depends(get_db), _actor = Depends(require_super_admin)):
     categoria = CategoriaService(db).obtener(categoria_id)
     if categoria is None:
         raise HTTPException(status_code=404, detail="Categoría no encontrada")
@@ -61,6 +62,7 @@ def actualizar(
     requiere_firma: bool = Form(False), requiere_mantenimiento: bool = Form(False),
     genera_qr: bool = Form(False), genera_codigo_barras: bool = Form(False),
     db: Session = Depends(get_db),
+    _actor = Depends(require_super_admin),
 ):
     datos = CategoriaUpdate(
         nombre=nombre.strip(), prefijo=prefijo.strip().upper(), descripcion=descripcion,
@@ -78,7 +80,7 @@ def actualizar(
 
 
 @router.post("/{categoria_id}/estado")
-def cambiar_estado(categoria_id: int, db: Session = Depends(get_db)):
+def cambiar_estado(categoria_id: int, db: Session = Depends(get_db), _actor = Depends(require_super_admin)):
     categoria = CategoriaService(db).cambiar_estado(categoria_id)
     if categoria is None:
         raise HTTPException(status_code=404, detail="Categoría no encontrada")

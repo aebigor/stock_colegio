@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.templates import templates
-from app.modules.auth.dependencies import get_current_user
+from app.modules.auth.dependencies import get_current_user, require_super_admin
 
 from .schema import (
     PersonaCreate,
@@ -57,7 +57,8 @@ def index(
 
 @router.get("/crear")
 def crear(
-    request: Request
+    request: Request,
+    _actor = Depends(require_super_admin),
 ):
 
     return templates.TemplateResponse(
@@ -90,7 +91,8 @@ def guardar(
 
     activo: bool = Form(False),
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _actor = Depends(require_super_admin),
 
 ):
 
@@ -133,7 +135,8 @@ def editar(
 
     request: Request,
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _actor = Depends(require_super_admin),
 
 ):
 
@@ -181,7 +184,8 @@ def actualizar(
 
     activo: bool = Form(False),
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _actor = Depends(require_super_admin),
 
 ):
 
@@ -232,7 +236,8 @@ def cambiar_estado(
 
     persona_id: int,
 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _actor = Depends(require_super_admin)
 
 ):
 

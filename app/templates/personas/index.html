@@ -16,6 +16,7 @@
 
     </div>
 
+    {% if request.state.user.rol and request.state.user.rol.nombre in ["Super Admin", "Superadministrador"] %}
     <a
         href="/personas/crear"
         class="btn-primary"
@@ -26,6 +27,7 @@
         Nueva Persona
 
     </a>
+    {% endif %}
 
 </div>
 
@@ -229,6 +231,8 @@
 
                     </a>
 
+                    {% if request.state.user.rol and request.state.user.rol.nombre in ["Super Admin", "Superadministrador"] %}
+
                     <a
                         href="/personas/{{ persona.id }}/editar"
                         title="Editar"
@@ -254,6 +258,8 @@
                         {% endif %}
 
                     </a>
+
+                    {% endif %}
 
                 </td>
 
