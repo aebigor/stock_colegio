@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.templates import templates
-from app.modules.auth.dependencies import get_current_user, user_area, area_permitida, require_super_admin
+from app.modules.auth.dependencies import get_current_user, user_area, area_permitida
 from app.modules.auth.models import Usuario
 from app.modules.categorias.service import CategoriaService
 from app.modules.personas.service import PersonaService
@@ -18,7 +18,7 @@ from app.core.config import settings
 from .schema import ActivoCreate, ActivoUpdate
 from .service import ActivoService
 
-router = APIRouter(prefix="/activos", tags=["Activos"], dependencies=[Depends(require_super_admin)])
+router = APIRouter(prefix="/activos", tags=["Activos"], dependencies=[Depends(get_current_user)])
 
 
 def _area_filtro(user: Usuario, requested: str | None) -> str:

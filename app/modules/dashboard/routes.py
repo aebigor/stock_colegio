@@ -3,11 +3,11 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.templates import templates
-from app.modules.auth.dependencies import get_current_user, user_area, require_super_admin
+from app.modules.auth.dependencies import get_current_user, user_area
 from app.modules.auth.models import Usuario
 from .service import DashboardService
 
-router = APIRouter(prefix="/dashboard", tags=["Dashboard"], dependencies=[Depends(require_super_admin)])
+router = APIRouter(prefix="/dashboard", tags=["Dashboard"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("")

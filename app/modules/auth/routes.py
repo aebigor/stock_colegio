@@ -18,7 +18,7 @@ router = APIRouter(tags=["Autenticación"])
 def inicio(user: Usuario = Depends(get_current_user)):
     if user.rol and user.rol.nombre in {"Super Admin", "Superadministrador"}:
         return RedirectResponse(url="/dashboard", status_code=303)
-    return RedirectResponse(url="/categorias", status_code=303)
+    return RedirectResponse(url="/activos", status_code=303)
 
 @router.get("/login")
 def login(request: Request):
@@ -51,7 +51,7 @@ def login_post(
         )
 
     is_platform = (user.correo.strip().lower() == settings.PLATFORM_ADMIN_EMAIL.strip().lower() and user.rol and user.rol.nombre == "Administrador de Plataforma" and user.empresa_id is None)
-    response = RedirectResponse(url="/empresas" if is_platform else ("/dashboard" if user.rol and user.rol.nombre in {"Super Admin", "Superadministrador"} else "/categorias"), status_code=303)
+    response = RedirectResponse(url="/empresas" if is_platform else ("/dashboard" if user.rol and user.rol.nombre in {"Super Admin", "Superadministrador"} else "/activos"), status_code=303)
     response.set_cookie(
         key="access_token",
         value=token,

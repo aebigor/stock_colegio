@@ -66,39 +66,41 @@
         </div>
         {% else %}
         {% set es_admin = request.state.user.rol and request.state.user.rol.nombre in ["Super Admin", "Superadministrador"] %}
+
         {% if es_admin %}
         <div class="menu-section">
             <span class="menu-title">PRINCIPAL</span>
             <a href="/dashboard" class="menu-link"><i class="bi bi-grid-1x2-fill"></i><span>Dashboard</span></a>
         </div>
+        {% endif %}
 
         <div class="menu-section">
             <span class="menu-title">INVENTARIO</span>
             <a href="/categorias" class="menu-link"><i class="bi bi-tags-fill"></i><span>Categorías</span><span class="badge-menu">{{ total_categorias|default(0) }}</span></a>
             <a href="/activos" class="menu-link"><i class="bi bi-pc-display"></i><span>Activos</span><span class="badge-menu">{{ total_activos|default(0) }}</span></a>
+            {% if es_admin %}
             <a href="/mantenimientos" class="menu-link"><i class="bi bi-tools"></i><span>Mantenimientos</span><span class="badge-menu">{{ total_mantenimientos|default(0) }}</span></a>
+            {% endif %}
         </div>
 
         <div class="menu-section">
             <span class="menu-title">GESTIÓN</span>
             <a href="/personas" class="menu-link"><i class="bi bi-people-fill"></i><span>Personas</span></a>
+            <a href="/ubicaciones" class="menu-link"><i class="bi bi-geo-alt-fill"></i><span>Ubicaciones</span></a>
         </div>
 
+        <div class="menu-section">
+            <span class="menu-title">REPORTES</span>
+            <a href="/reportes" class="menu-link"><i class="bi bi-bar-chart-fill"></i><span>Mis reportes</span></a>
+        </div>
+
+        {% if es_admin %}
         <div class="menu-section">
             <span class="menu-title">ADMINISTRACIÓN</span>
             <a href="/usuarios" class="menu-link"><i class="bi bi-person-gear"></i><span>Usuarios</span></a>
             {% if request.state.es_superadmin_principal|default(false) %}
             <a href="/configuracion" class="menu-link"><i class="bi bi-gear-wide-connected"></i><span>Configuraciones</span></a>
             {% endif %}
-            <a href="/reportes" class="menu-link"><i class="bi bi-bar-chart-fill"></i><span>Reportes</span></a>
-            <a href="/ubicaciones" class="menu-link"><i class="bi bi-geo-alt-fill"></i><span>Ubicaciones</span></a>
-        </div>
-        {% else %}
-        <div class="menu-section">
-            <span class="menu-title">CONSULTA</span>
-            <a href="/categorias" class="menu-link"><i class="bi bi-tags-fill"></i><span>Categorías</span></a>
-            <a href="/personas" class="menu-link"><i class="bi bi-people-fill"></i><span>Personas</span></a>
-            <a href="/ubicaciones" class="menu-link"><i class="bi bi-geo-alt-fill"></i><span>Ubicaciones</span></a>
         </div>
         {% endif %}
         {% endif %}
