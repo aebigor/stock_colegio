@@ -160,7 +160,7 @@ def index(request: Request, levantamiento_id: int | None = None, db: Session = D
 @router.post("/crear")
 def crear(ubicacion_id: int = Form(...), responsable_id: int | None = Form(None), db: Session = Depends(get_db), user: Usuario = Depends(get_current_user)):
     try:
-        lev = LevantamientoService(db).crear_borrador(ubicacion_id, responsable_id, "Todas", _nombre_usuario(user))
+        lev = LevantamientoService(db).crear_borrador(ubicacion_id, responsable_id, "Todas", user.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return RedirectResponse(url=f"/activos/inventario-fisico/?levantamiento_id={lev.id}", status_code=303)
@@ -217,7 +217,7 @@ async def importar_excel(
             raise ValueError("No encontré una fila de encabezados. Usa columnas como ELEMENTO, REFERENCIA, CANT., ESTADO y OBSERVACIÓN.")
         area = "Todas"
         service = LevantamientoService(db)
-        lev = service.crear_borrador(ubicacion_id, responsable_id, area, _nombre_usuario(user))
+        lev = service.crear_borrador(ubicacion_id, responsable_id, area, user.id)
         creados = 0
         for row in range(header_row + 1, ws.max_row + 1):
             nombre = _valor_fila(ws, row, cols.get("nombre"))
