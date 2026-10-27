@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title }}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/inventario_fisico.css">
+  <style>
+    body{background:#070d18;color:#eef5ff;min-height:100vh}.public-wrap{max-width:1200px;margin:0 auto;padding:28px 18px}.public-card{background:#111b2c;border:1px solid #24344d;border-radius:14px;padding:20px;margin-bottom:18px}.public-card h1,.public-card h2,.public-card h3{color:#fff}.public-brand{display:flex;justify-content:space-between;gap:16px;align-items:center}.public-link-note{background:#0d3341;border:1px solid #2a6073;color:#d8f8ff;border-radius:10px;padding:12px}.public-table input,.public-table select,.public-table textarea{background:#0b1422;color:#fff;border:1px solid #31435e;border-radius:7px;padding:7px}.public-table textarea{min-width:220px}.locked{background:#3b2d0c;border-color:#71571d;color:#ffe9a6}.status{color:#fff}.new-badge{color:#07131f;background:#fbbf24;padding:4px 7px;border-radius:999px;font-size:.72rem}
+  </style>
+</head>
+<body>
+<div class="public-wrap">
+  <section class="public-card">
+    <div class="public-brand">
+      <div>
+        <div class="eyebrow">CONTROL FÍSICO</div>
+        <h1>Verificación de inventario</h1>
+        <p class="help">{{ levantamiento.ubicacion.nombre if levantamiento.ubicacion else 'Ubicación' }} · {{ levantamiento.responsable.nombre if levantamiento.responsable else 'Sin responsable' }}</p>
+      </div>
+      <span class="status">{{ levantamiento.estado }}</span>
+    </div>
+    {% if levantamiento.estado == 'Borrador' %}
+      <div class="public-link-note"><i class="bi bi-info-circle"></i> Revisa cada elemento, indica cuántos encontraste, selecciona su estado y escribe cualquier observación. Si encuentras algo que no aparece en el listado, agrégalo abajo. Cuando termines, pulsa <strong>Enviar a Logística</strong>.</div>
+    {% elif levantamiento.estado == 'Pendiente de aprobación' %}
+      <div class="notice locked"><i class="bi bi-lock-fill"></i> El formulario fue enviado. Ya no puedes modificarlo; Logística está revisando la información.</div>
+    {% else %}
+      <div class="approval-box approved"><i class="bi bi-check-circle-fill"></i> Este levantamiento ya fue aprobado por Logística.</div>
+    {% endif %}
+  </section>
+
+  <section class="public-card">
+    <h2>Elementos registrados</h2>
+    <div class="table-responsive">
+      <table class="physical-table public-table">
+        <thead><tr><th>Elemento</th><th>Referencia</th><th>Sistema</th><th>Encontrado</th><th>Estado físico</th><th>Observación</th><th>Logística</th></tr></thead>
+        <tbody>
+        {% for d in levantamiento.detalles %}
+          <tr>
+            <td><strong>{{ d.nombre }}</strong>{% if d.categoria %}<br><small>{{ d.categoria.nombre }}</small>{% endif %}{% if d.es_nuevo %}<br><span class="new-badge">Hallazgo nuevo</span>{% endif %}</td>
+            <td>{{ d.referencia or '—' }}</td>
+            <td>{{ d.cantidad_sistema }}</td>
+            <td>{% if levantamiento.estado == 'Borrador' %}<input form="detalle-{{ d.id }}" type="number" name="cantidad_encontrada" min="0" value="{{ d.cantidad_encontrada }}" style="width:90px">{% else %}{{ d.cantidad_encontrada }}{% endif %}</td>
+            <td>{% if levantamiento.estado == 'Borrador' %}<select form="detalle-{{ d.id }}" name="estado_fisico">{% for estado in ['Bueno','Regular','Malo','No encontrado','Mantenimiento'] %}<option {% if d.estado_fisico == estado %}selected{% endif %}>{{ estado }}</option>{% endfor %}</select>{% else %}{{ d.estado_fisico }}{% endif %}</td>
+            <td>{% if levantamiento.estado == 'Borrador' %}<textarea form="detalle-{{ d.id }}" name="observacion" rows="2" placeholder="Escribe la novedad o condición">{{ d.observacion or '' }}</textarea><form id="detalle-{{ d.id }}" method="post" action="/inventario-fisico-publico/{{ token }}/detalle/{{ d.id }}"><button class="btn btn-sm btn-outline-primary mt-1"><i class="bi bi-save"></i> Guardar</button></form>{% else %}{{ d.observacion or '—' }}{% endif %}</td>
+            <td>{% if d.verificado_logistica %}<span class="status status-aprobado">Verificado</span>{% else %}Pendiente{% endif %}</td>
+          </tr>
+        {% else %}<tr><td colspan="7" class="empty">No hay elementos registrados.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {% if levantamiento.estado == 'Borrador' %}
+  <section class="public-card">
+    <h2>Encontré un activo que no estaba en el sistema</h2>
+    <p class="help">Este elemento quedará como hallazgo nuevo. Logística lo revisará antes de incorporarlo al inventario oficial.</p>
+    <form method="post" action="/inventario-fisico-publico/{{ token }}/hallazgo" class="row g-3">
+      <div class="col-md-5"><label>Elemento *</label><input name="nombre" required placeholder="Ej. Guitarra acústica"></div>
+      <div class="col-md-3"><label>Categoría *</label><select name="categoria_id" required><option value="">Seleccione...</option>{% for c in categorias %}<option value="{{ c.id }}">{{ c.nombre }}</option>{% endfor %}</select></div>
+      <div class="col-md-2"><label>Cantidad</label><input name="cantidad" type="number" min="1" value="1"></div>
+      <div class="col-md-2"><label>Estado</label><select name="estado_fisico"><option>Bueno</option><option>Regular</option><option>Malo</option><option>Mantenimiento</option></select></div>
+      <div class="col-md-3"><label>Referencia</label><input name="referencia"></div><div class="col-md-3"><label>Marca</label><input name="marca"></div><div class="col-md-3"><label>Modelo</label><input name="modelo"></div><div class="col-md-3"><label>Serial</label><input name="serial"></div>
+      <div class="col-12"><label>Observación *</label><textarea name="observacion" rows="2" required placeholder="Describe dónde lo encontraste y su condición"></textarea></div>
+      <div class="col-12"><button class="btn btn-outline-primary"><i class="bi bi-plus-circle"></i> Agregar hallazgo</button></div>
+    </form>
+  </section>
+  <section class="public-card">
+    <h2>Firma del docente / responsable</h2>
+    <p class="help">Esta firma acompaña la revisión. Si Logística la aprueba, la aprobación se convierte automáticamente en la entrega de los activos al responsable; no tendrás que hacer otra entrega masiva.</p>
+    <div style="border:2px dashed #334155;border-radius:12px;background:#0b1220;padding:8px">
+      <canvas id="firma-docente" width="900" height="240" style="width:100%;height:220px;display:block"></canvas>
+    </div>
+    <form id="enviar-revision" method="post" action="/inventario-fisico-publico/{{ token }}/enviar" class="mt-3" onsubmit="return prepararFirma(event)">
+      <input type="hidden" name="firma" id="firma-docente-input">
+      <button type="button" class="btn btn-outline-secondary me-2" onclick="limpiarFirmaDocente()">Limpiar firma</button>
+      <button class="btn btn-primary"><i class="bi bi-send"></i> Enviar a Logística y bloquear</button>
+    </form>
+  </section>
+  {% endif %}
+</div>
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+<script>
+const firmaCanvas=document.getElementById('firma-docente');
+const firmaPad=firmaCanvas ? new SignaturePad(firmaCanvas) : null;
+function limpiarFirmaDocente(){ if(firmaPad) firmaPad.clear(); }
+function prepararFirma(e){
+  if(!firmaPad || firmaPad.isEmpty()){ alert('Debes firmar la revisión antes de enviarla.'); return false; }
+  document.getElementById('firma-docente-input').value=firmaPad.toDataURL();
+  return confirm('Al enviar ya no podrás modificar el inventario. ¿Deseas enviarlo a Logística?');
+}
+</script>
+</body>
+</html>

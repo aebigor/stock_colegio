@@ -2,7 +2,7 @@
 {% block content %}
 <div class="page-header">
   <div><h1>Bodegas y ubicaciones</h1><p>Las bodegas se administran de forma independiente por inventario.</p></div>
-  {% if request.state.user.rol and request.state.user.rol.nombre in ["Super Admin", "Superadministrador"] %}<a href="/ubicaciones/crear" class="btn-primary"><i class="bi bi-plus-circle"></i> Nueva bodega / ubicación</a>{% endif %}
+  <a href="/ubicaciones/crear" class="btn-primary"><i class="bi bi-plus-circle"></i> Nueva bodega / ubicación</a>
 </div>
 <div class="card-panel">
   {% if puede_ver_areas %}
@@ -20,7 +20,7 @@
           <td>{{ ubicacion.codigo }}</td><td><strong>{{ ubicacion.nombre }}</strong><br><small>{{ ubicacion.descripcion or '' }}</small></td>
           <td>{{ ubicacion.area }}</td><td>{{ ubicacion.tipo }}</td><td>{{ ubicacion.sede }}</td><td>{{ ubicacion.curso or '—' }}</td><td>{{ ubicacion.piso or '—' }}</td>
           <td>{% if ubicacion.activo %}<span class="badge-success">Activa</span>{% else %}<span class="badge-danger">Inactiva</span>{% endif %}</td>
-          <td>{% if request.state.user.rol and request.state.user.rol.nombre in ["Super Admin", "Superadministrador"] %}<div class="d-flex flex-wrap gap-1"><a href="/ubicaciones/{{ ubicacion.id }}/editar" class="btn btn-sm btn-outline-primary" title="Editar"><i class="bi bi-pencil-square"></i></a><a href="/ubicaciones/{{ ubicacion.id }}/estado" class="btn btn-sm btn-outline-secondary" title="{% if ubicacion.activo %}Desactivar{% else %}Activar{% endif %}"><i class="bi {% if ubicacion.activo %}bi-eye-slash{% else %}bi-eye{% endif %}"></i></a></div>{% else %}<span class="text-muted">Solo consulta</span>{% endif %}</td>
+          <td><div class="d-flex flex-wrap gap-1"><a href="/ubicaciones/{{ ubicacion.id }}/editar" class="btn btn-sm btn-outline-primary" title="Editar"><i class="bi bi-pencil-square"></i></a><a href="/ubicaciones/{{ ubicacion.id }}/estado" class="btn btn-sm btn-outline-secondary" title="{% if ubicacion.activo %}Desactivar{% else %}Activar{% endif %}"><i class="bi {% if ubicacion.activo %}bi-eye-slash{% else %}bi-eye{% endif %}"></i></a></div></td>
         </tr>
       {% else %}
         <tr><td colspan="9" class="text-center py-4">No hay bodegas registradas para esta área.</td></tr>

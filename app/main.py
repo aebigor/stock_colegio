@@ -8,6 +8,7 @@ from app.core.database import SessionLocal
 from app.modules.auth.routes import router as auth_router
 from app.modules.usuarios.routes import router as usuarios_router
 from app.modules.activos.routes import router as activos_router
+from app.modules.activos.levantamiento_routes import router as inventario_fisico_router, public_router as inventario_fisico_public_router
 from app.modules.categorias.routes import router as categorias_router
 from app.modules.personas.routes import router as personas_router
 from app.modules.ubicaciones import router as ubicaciones_router
@@ -43,6 +44,8 @@ app.include_router(empresas_router)
 app.include_router(usuarios_router)
 app.include_router(configuracion_router)
 app.include_router(activos_router)
+app.include_router(inventario_fisico_router)
+app.include_router(inventario_fisico_public_router)
 app.include_router(ubicaciones_router)
 app.include_router(personas_router)
 app.include_router(dashboard_router)

@@ -38,7 +38,7 @@
 
 <th>Estado</th>
 
-<th>Usuario</th>
+{% if es_super_admin %}<th>Usuario</th>{% endif %}
 
 <th>Observaciones</th>
 
@@ -100,11 +100,11 @@ Sin ubicación registrada
 
 </td>
 
-<td>
+{% if es_super_admin %}<td>
 
 {{ item.usuario }}
 
-</td>
+</td>{% endif %}
 
 <td>
 
@@ -118,7 +118,7 @@ Sin ubicación registrada
 
 <tr>
 
-<td colspan="7">
+<td colspan="{{ 7 if es_super_admin else 6 }}">
 
 <center>
 

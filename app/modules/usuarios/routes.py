@@ -38,7 +38,7 @@ def _area_para_rol(nombre_rol: str) -> str:
 @router.get("/")
 def index(
     request: Request,
-    actor: Usuario = Depends(require_super_admin),
+    actor: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     usuarios = (
@@ -154,6 +154,11 @@ def actualizar_usuario(
     if user is None:
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
 
+    rol_actual = user.rol.nombre if user.rol else ""
+    actor_es_super = actor.rol and actor.rol.nombre in {"Super Admin", "Superadministrador"}
+    if rol_actual in {"Super Admin", "Superadministrador"} and not actor_es_super and rol_id != user.rol_id:
+        raise HTTPException(status_code=403, detail="No puedes cambiar el rol de un Super Admin.")
+
     nombre_usuario = usuario.strip().lower()
     correo_usuario = correo.strip().lower()
     if len(nombre_usuario) < 3:
@@ -201,6 +206,8 @@ def cambiar_estado_usuario(
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
     if user.id == actor.id:
         raise HTTPException(status_code=400, detail="No puedes desactivar tu propia cuenta.")
+    if user.rol and user.rol.nombre in {"Super Admin", "Superadministrador"} and not (actor.rol and actor.rol.nombre in {"Super Admin", "Superadministrador"}):
+        raise HTTPException(status_code=403, detail="Solo un Super Admin puede desactivar otro Super Admin.")
     user.estado = not user.estado
     db.commit()
     return RedirectResponse(url="/usuarios", status_code=303)

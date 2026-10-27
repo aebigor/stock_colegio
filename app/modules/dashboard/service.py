@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.modules.activos.model import Activo
 from app.modules.activos.movimiento_model import Movimiento
+from app.modules.activos.levantamiento_model import LevantamientoInventario
 from app.modules.categorias.model import Categoria
 
 
@@ -42,3 +43,13 @@ class DashboardService:
 
     def activos_mantenimiento(self):
         return self._activos().filter(Activo.estado == "Mantenimiento").order_by(Activo.nombre.asc()).all()
+
+    def levantamientos_recientes(self):
+        query = self.db.query(LevantamientoInventario).options(
+            joinedload(LevantamientoInventario.ubicacion),
+            joinedload(LevantamientoInventario.responsable),
+        )
+        if self.area != "Todas":
+            query = query.filter(LevantamientoInventario.area == self.area)
+        return query.order_by(LevantamientoInventario.created_at.desc(), LevantamientoInventario.id.desc()).limit(10).all()
+

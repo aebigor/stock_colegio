@@ -78,6 +78,7 @@
             <span class="menu-title">INVENTARIO</span>
             <a href="/categorias" class="menu-link"><i class="bi bi-tags-fill"></i><span>Categorías</span><span class="badge-menu">{{ total_categorias|default(0) }}</span></a>
             <a href="/activos" class="menu-link"><i class="bi bi-pc-display"></i><span>Activos</span><span class="badge-menu">{{ total_activos|default(0) }}</span></a>
+            <a href="/activos/inventario-fisico/" class="menu-link"><i class="bi bi-clipboard-check"></i><span>Inventario físico</span></a>
             {% if es_admin %}
             <a href="/mantenimientos" class="menu-link"><i class="bi bi-tools"></i><span>Mantenimientos</span><span class="badge-menu">{{ total_mantenimientos|default(0) }}</span></a>
             {% endif %}
@@ -94,15 +95,13 @@
             <a href="/reportes" class="menu-link"><i class="bi bi-bar-chart-fill"></i><span>Mis reportes</span></a>
         </div>
 
-        {% if es_admin %}
         <div class="menu-section">
             <span class="menu-title">ADMINISTRACIÓN</span>
             <a href="/usuarios" class="menu-link"><i class="bi bi-person-gear"></i><span>Usuarios</span></a>
-            {% if request.state.es_superadmin_principal|default(false) %}
+            {% if es_admin and request.state.es_superadmin_principal|default(false) %}
             <a href="/configuracion" class="menu-link"><i class="bi bi-gear-wide-connected"></i><span>Configuraciones</span></a>
             {% endif %}
         </div>
-        {% endif %}
         {% endif %}
 
         <div class="logout">

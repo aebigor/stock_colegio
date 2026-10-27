@@ -1,6 +1,6 @@
 {% extends "layouts/base.html" %}
 {% block content %}
-<div class="page-header"><div><h1>Registrar usuario</h1><p>El sistema asigna el inventario según el rol seleccionado.</p></div></div>
+<div class="page-header"><div><h1>Registrar usuario</h1><p>Solo el Super Admin puede crear cuentas. El rol seleccionado determina si la cuenta administra Medios o Logística.</p></div></div>
 <form method="post" action="/usuarios/crear" class="card-panel">
   <div class="row g-3">
     <div class="col-md-6"><label class="form-label">Nombres</label><input class="form-control" name="nombre" maxlength="100" required></div>

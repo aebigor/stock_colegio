@@ -67,11 +67,6 @@
   <input type="hidden" name="operacion" value="{{ operacion }}">
   {% if ubicacion %}<input type="hidden" name="ubicacion_id" value="{{ ubicacion.id }}">{% endif %}
   {% if ubicacion_destino %}<input type="hidden" name="ubicacion_destino_id" value="{{ ubicacion_destino.id }}">{% endif %}
-  <div class="actor-note mb-4">
-    <strong>Usuario que registra la operación:</strong> {{ usuario_actual }} · {{ usuario_actual_area }}
-    <br><small>Se toma automáticamente de la cuenta que está diligenciando el formulario. No hay un "Coordinador de Medios" fijo.</small>
-  </div>
-
   <div class="row g-3">
     {% if operacion == 'Entrega' %}
     <div class="col-lg-6">

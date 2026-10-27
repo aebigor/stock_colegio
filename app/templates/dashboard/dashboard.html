@@ -101,7 +101,7 @@
 
 <th>Movimiento</th>
 
-<th>Usuario</th>
+{% if es_super_admin %}<th>Usuario</th>{% endif %}
 
 <th>Fecha</th>
 
@@ -121,7 +121,7 @@
 
 <td>{{ item.tipo }}</td>
 
-<td>{{ item.usuario }}</td>
+{% if es_super_admin %}<td>{{ item.usuario }}</td>{% endif %}
 
 <td>{{ item.created_at.strftime("%d/%m/%Y") }}</td>
 
@@ -133,7 +133,7 @@
 
 <tr>
 
-<td colspan="4">
+<td colspan="{{ 4 if es_super_admin else 3 }}">
 
 No existen movimientos registrados.
 
@@ -225,6 +225,46 @@ No existen equipos en mantenimiento.
 </div>
 
 
+
+{% if es_super_admin %}
+<div class="activity">
+<h2><i class="bi bi-shield-check"></i> Seguimiento de usuarios y revisiones</h2>
+<p>Vista exclusiva del Super Admin. Aquí puedes ver qué usuario registró cada movimiento y el avance de los levantamientos físicos realizados por docentes.</p>
+<table>
+<thead><tr><th>Fecha</th><th>Evento</th><th>Ubicación / Activo</th><th>Usuario</th><th>Detalle</th></tr></thead>
+<tbody>
+{% for item in movimientos %}
+<tr>
+<td>{{ item.created_at.strftime("%d/%m/%Y %H:%M") }}</td>
+<td>{{ item.tipo }}</td>
+<td>{{ item.activo_rel.nombre if item.activo_rel else '—' }}</td>
+<td>{{ item.usuario or '—' }}</td>
+<td>{{ item.observaciones or '—' }}</td>
+</tr>
+{% endfor %}
+{% if not movimientos %}<tr><td colspan="5">No hay movimientos registrados.</td></tr>{% endif %}
+</tbody>
+</table>
+
+<h3 style="margin-top:24px">Levantamientos físicos</h3>
+<table>
+<thead><tr><th>Fecha</th><th>Ubicación</th><th>Responsable</th><th>Estado</th><th>Creado por</th><th>Aprobado por</th></tr></thead>
+<tbody>
+{% for item in levantamientos %}
+<tr>
+<td>{{ item.created_at.strftime("%d/%m/%Y %H:%M") if item.created_at else '—' }}</td>
+<td>{{ item.ubicacion.nombre if item.ubicacion else '—' }}</td>
+<td>{{ item.responsable.nombre if item.responsable else '—' }}</td>
+<td>{{ item.estado }}</td>
+<td>{{ item.creado_por }}</td>
+<td>{{ item.aprobado_por or 'Pendiente' }}</td>
+</tr>
+{% endfor %}
+{% if not levantamientos %}<tr><td colspan="6">No hay levantamientos físicos.</td></tr>{% endif %}
+</tbody>
+</table>
+</div>
+{% endif %}
 
 <div class="activity">
 

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.templates import templates
-from app.modules.auth.dependencies import get_current_user, user_area, area_permitida
+from app.modules.auth.dependencies import get_current_user, user_area, area_permitida, SUPER_ADMIN_ROLES
 from app.modules.auth.models import Usuario
 from app.modules.categorias.service import CategoriaService
 from app.modules.personas.service import PersonaService
@@ -554,4 +554,4 @@ def historial(activo_id: int, request: Request, db: Session = Depends(get_db), u
     if activo is None:
         _not_found()
     movimientos = MovimientoService(db).listar_por_activo(activo_id, area)
-    return templates.TemplateResponse(request=request, name="activos/historial.html", context={"title": "Historial del activo", "activo": activo, "historial": movimientos})
+    return templates.TemplateResponse(request=request, name="activos/historial.html", context={"title": "Historial del activo", "activo": activo, "historial": movimientos, "es_super_admin": bool(user.rol and user.rol.nombre in SUPER_ADMIN_ROLES)})

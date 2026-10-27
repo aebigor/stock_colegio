@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.templates import templates
-from app.modules.auth.dependencies import get_current_user, require_super_admin, user_area, area_permitida
+from app.modules.auth.dependencies import get_current_user, user_area
 from app.modules.auth.models import Usuario
 from .schema import UbicacionCreate, UbicacionUpdate
 from .service import UbicacionService
@@ -40,14 +40,13 @@ def index(
             "title": "Bodegas y ubicaciones",
             "ubicaciones": UbicacionService(db).listar(scope, include_inactive=True),
             "area_filtro": scope,
-            "puede_ver_areas": user_area(user) == "Todas",
+            "puede_ver_areas": True,
         },
     )
 
 
 @router.get("/crear")
 def crear_formulario(request: Request, user: Usuario = Depends(get_current_user),
-    _actor = Depends(require_super_admin)
 ):
     scope = user_area(user)
     return templates.TemplateResponse(
@@ -75,9 +74,8 @@ def guardar(
     db: Session = Depends(get_db),
     user: Usuario = Depends(get_current_user),
 
-    _actor = Depends(require_super_admin)
 ):
-    area_objetivo = area_permitida(user, area)
+    area_objetivo = area.strip() if area and area.strip() in {"Medios", "Logística"} else user_area(user)
     datos = UbicacionCreate(
         nombre=nombre.strip(), codigo=codigo.strip().upper(), area=area_objetivo,
         curso=curso.strip() or None, sede=sede, tipo=tipo.strip(), piso=piso.strip() or None,
@@ -97,9 +95,8 @@ def editar(
     db: Session = Depends(get_db),
     user: Usuario = Depends(get_current_user),
 
-    _actor = Depends(require_super_admin)
 ):
-    ubicacion = UbicacionService(db).obtener(ubicacion_id, user_area(user))
+    ubicacion = UbicacionService(db).obtener(ubicacion_id, "Todas")
     if ubicacion is None:
         raise HTTPException(status_code=404, detail="Bodega no encontrada en tu inventario.")
     return templates.TemplateResponse(
@@ -107,7 +104,7 @@ def editar(
         name="ubicaciones/editar.html",
         context={
             "title": "Editar bodega / ubicación", "ubicacion": ubicacion,
-            "puede_ver_areas": user_area(user) == "Todas",
+            "puede_ver_areas": True,
         },
     )
 
@@ -127,20 +124,19 @@ def actualizar(
     db: Session = Depends(get_db),
     user: Usuario = Depends(get_current_user),
 
-    _actor = Depends(require_super_admin)
 ):
     service = UbicacionService(db)
-    actual = service.obtener(ubicacion_id, user_area(user))
+    actual = service.obtener(ubicacion_id, "Todas")
     if actual is None:
         raise HTTPException(status_code=404, detail="Bodega no encontrada en tu inventario.")
-    area_objetivo = area_permitida(user, area) if user_area(user) == "Todas" else actual.area
+    area_objetivo = area.strip() if area and area.strip() in {"Medios", "Logística"} else actual.area
     datos = UbicacionUpdate(
         nombre=nombre.strip(), codigo=codigo.strip().upper(), area=area_objetivo,
         curso=curso.strip() or None, sede=sede, tipo=tipo.strip(), piso=piso.strip() or None,
         descripcion=descripcion.strip() or None, activo=activo,
     )
     try:
-        updated = service.actualizar(ubicacion_id, datos, area_scope=user_area(user))
+        updated = service.actualizar(ubicacion_id, datos, area_scope="Todas")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if updated is None:
@@ -154,9 +150,8 @@ def cambiar_estado(
     db: Session = Depends(get_db),
     user: Usuario = Depends(get_current_user),
 
-    _actor = Depends(require_super_admin)
 ):
-    actualizada = UbicacionService(db).cambiar_estado(ubicacion_id, user_area(user))
+    actualizada = UbicacionService(db).cambiar_estado(ubicacion_id, "Todas")
     if actualizada is None:
         raise HTTPException(status_code=404, detail="Bodega no encontrada en tu inventario.")
     return RedirectResponse(url="/ubicaciones", status_code=303)

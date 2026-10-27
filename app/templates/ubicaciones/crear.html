@@ -27,7 +27,6 @@
 
 <div class="row">
 
-    {% if puede_ver_areas %}
     <div class="col-md-4 mb-3">
         <label>Inventario / Área *</label>
         <select name="area" class="form-select" required>
@@ -35,9 +34,6 @@
             <option value="Logística" {% if area_inicial == "Logística" %}selected{% endif %}>Logística</option>
         </select>
     </div>
-    {% else %}
-    <div class="col-md-4 mb-3"><label>Inventario / Área</label><input class="form-control" value="{{ area_inicial }}" readonly></div>
-    {% endif %}
 
     <div class="col-md-6 mb-3">
 
