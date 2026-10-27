@@ -132,9 +132,9 @@ def index(request: Request, levantamiento_id: int | None = None, db: Session = D
     else:
         todos = service.listar("Todas")
         nombre_actual = _nombre_usuario(user)
-        levantamientos = [x for x in todos if x.creado_por == nombre_actual]
+        levantamientos = [x for x in todos if x.creado_por == user.id]
     levantamiento = service.obtener(levantamiento_id, "Todas") if levantamiento_id else None
-    if levantamiento and not es_logistica and levantamiento.creado_por != _nombre_usuario(user):
+    if levantamiento and not es_logistica and levantamiento.creado_por != user.id:
         levantamiento = None
     ubicaciones = UbicacionService(db).listar("Todas")
     personas = PersonaService(db).listar()
@@ -303,7 +303,7 @@ def enviar(levantamiento_id: int, firma: str = Form(""), db: Session = Depends(g
         lev = LevantamientoService(db).obtener(levantamiento_id, user_area(user))
         if not lev:
             raise ValueError("Levantamiento no encontrado.")
-        if not _es_logistica(user) and lev.creado_por != _nombre_usuario(user):
+        if not _es_logistica(user) and lev.creado_por != user.id:
             raise ValueError("No puedes enviar el levantamiento de otro usuario.")
         LevantamientoService(db).enviar(levantamiento_id, firma=firma)
     except ValueError as exc:
@@ -318,7 +318,7 @@ def aprobar(levantamiento_id: int, db: Session = Depends(get_db), user: Usuario 
     if not lev:
         raise HTTPException(status_code=404, detail="Levantamiento no encontrado.")
     try:
-        creados = LevantamientoService(db).aprobar(levantamiento_id, _nombre_usuario(user))
+        creados = LevantamientoService(db).aprobar(levantamiento_id, user.id, _nombre_usuario(user))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return RedirectResponse(url=f"/activos/inventario-fisico/?levantamiento_id={levantamiento_id}", status_code=303)

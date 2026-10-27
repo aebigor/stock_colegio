@@ -17,6 +17,8 @@ class LevantamientoService:
         q = self.db.query(LevantamientoInventario).options(
             joinedload(LevantamientoInventario.ubicacion),
             joinedload(LevantamientoInventario.responsable),
+            joinedload(LevantamientoInventario.creador),
+            joinedload(LevantamientoInventario.aprobador),
         )
         if area != "Todas":
             q = q.filter(LevantamientoInventario.area == area)
@@ -26,6 +28,8 @@ class LevantamientoService:
         q = self.db.query(LevantamientoInventario).options(
             joinedload(LevantamientoInventario.ubicacion),
             joinedload(LevantamientoInventario.responsable),
+            joinedload(LevantamientoInventario.creador),
+            joinedload(LevantamientoInventario.aprobador),
             joinedload(LevantamientoInventario.detalles).joinedload(LevantamientoDetalle.activo),
             joinedload(LevantamientoInventario.detalles).joinedload(LevantamientoDetalle.categoria),
         ).filter(LevantamientoInventario.id == levantamiento_id)
@@ -33,7 +37,7 @@ class LevantamientoService:
             q = q.filter(LevantamientoInventario.area == area)
         return q.first()
 
-    def crear_borrador(self, ubicacion_id, responsable_id, area, usuario):
+    def crear_borrador(self, ubicacion_id, responsable_id, area, usuario_id):
         ubicacion = self.db.query(Ubicacion).filter(Ubicacion.id == ubicacion_id, Ubicacion.area == area).first() if area != "Todas" else self.db.query(Ubicacion).filter(Ubicacion.id == ubicacion_id).first()
         if not ubicacion:
             raise ValueError("La ubicación seleccionada no es válida.")
@@ -42,7 +46,7 @@ class LevantamientoService:
             ubicacion_id=ubicacion.id,
             responsable_id=responsable.id if responsable else None,
             estado="Borrador",
-            creado_por=usuario,
+            creado_por=usuario_id,
             area=ubicacion.area,
             public_token=token_urlsafe(48),
         )
@@ -75,6 +79,8 @@ class LevantamientoService:
         return self.db.query(LevantamientoInventario).options(
             joinedload(LevantamientoInventario.ubicacion),
             joinedload(LevantamientoInventario.responsable),
+            joinedload(LevantamientoInventario.creador),
+            joinedload(LevantamientoInventario.aprobador),
             joinedload(LevantamientoInventario.detalles).joinedload(LevantamientoDetalle.activo),
             joinedload(LevantamientoInventario.detalles).joinedload(LevantamientoDetalle.categoria),
         ).filter(LevantamientoInventario.public_token == token).first()
@@ -212,7 +218,7 @@ class LevantamientoService:
         lev.enviado_at = datetime.now(timezone.utc)
         self.db.commit()
 
-    def aprobar(self, levantamiento_id, usuario):
+    def aprobar(self, levantamiento_id, usuario_id, usuario_nombre):
         lev = self.db.query(LevantamientoInventario).options(
             joinedload(LevantamientoInventario.detalles)
         ).filter(LevantamientoInventario.id == levantamiento_id).first()
@@ -264,10 +270,10 @@ class LevantamientoService:
                     observaciones=(
                         f"Entrega automática por aprobación del levantamiento físico #{lev.id}. "
                         f"Responsable: {responsable.nombre}. "
-                        f"Verificado por Logística: {usuario}."
+                        f"Verificado por Logística: {usuario_nombre}."
                         + (f" Observación del docente: {d.observacion}" if d.observacion else "")
                     ),
-                    usuario=usuario,
+                    usuario=usuario_nombre,
                     firma=lev.firma,
                     area=activo.area,
                     protocolo_aceptado=False,
@@ -316,10 +322,10 @@ class LevantamientoService:
                         observaciones=(
                             f"Hallazgo nuevo incorporado y entregado automáticamente al aprobar el levantamiento #{lev.id}. "
                             f"Responsable: {responsable.nombre}. "
-                            f"Aprobado por: {usuario}."
+                            f"Aprobado por: {usuario_nombre}."
                             + (f" Observación del docente: {d.observacion}" if d.observacion else "")
                         ),
-                        usuario=usuario,
+                        usuario=usuario_nombre,
                         firma=lev.firma,
                         area=lev.area,
                     ))
@@ -328,7 +334,7 @@ class LevantamientoService:
                 d.observacion = (d.observacion or "") + f" [Incorporado y entregado al responsable al aprobar levantamiento #{lev.id}.]"
 
         lev.estado = "Aprobado"
-        lev.aprobado_por = usuario
+        lev.aprobado_por = usuario_id
         lev.aprobado_at = datetime.now(timezone.utc)
         self.db.commit()
         return {"creados": creados, "entregados": entregados}

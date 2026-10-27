@@ -12,8 +12,8 @@ class LevantamientoInventario(TenantScoped, Base):
     responsable_id = Column(Integer, ForeignKey("personas.id"), nullable=True)
     estado = Column(String(30), nullable=False, default="Borrador")
     observaciones = Column(Text)
-    creado_por = Column(String(120), nullable=False)
-    aprobado_por = Column(String(120))
+    creado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=False, index=True)
+    aprobado_por = Column(Integer, ForeignKey("usuarios.id"), nullable=True, index=True)
     enviado_at = Column(DateTime(timezone=True))
     aprobado_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -25,6 +25,8 @@ class LevantamientoInventario(TenantScoped, Base):
 
     ubicacion = relationship("Ubicacion")
     responsable = relationship("Persona")
+    creador = relationship("Usuario", foreign_keys=[creado_por])
+    aprobador = relationship("Usuario", foreign_keys=[aprobado_por])
     detalles = relationship("LevantamientoDetalle", back_populates="levantamiento", cascade="all, delete-orphan")
 
 

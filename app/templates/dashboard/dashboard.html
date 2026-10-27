@@ -256,8 +256,8 @@ No existen equipos en mantenimiento.
 <td>{{ item.ubicacion.nombre if item.ubicacion else '—' }}</td>
 <td>{{ item.responsable.nombre if item.responsable else '—' }}</td>
 <td>{{ item.estado }}</td>
-<td>{{ item.creado_por }}</td>
-<td>{{ item.aprobado_por or 'Pendiente' }}</td>
+<td>{{ item.creador.nombre if item.creador else '—' }}{% if item.creador and item.creador.apellido %} {{ item.creador.apellido }}{% endif %}</td>
+<td>{% if item.aprobador %}{{ item.aprobador.nombre }}{% if item.aprobador.apellido %} {{ item.aprobador.apellido }}{% endif %}{% else %}Pendiente{% endif %}</td>
 </tr>
 {% endfor %}
 {% if not levantamientos %}<tr><td colspan="6">No hay levantamientos físicos.</td></tr>{% endif %}

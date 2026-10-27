@@ -57,7 +57,7 @@
         <td><strong>{{ item.ubicacion.nombre if item.ubicacion else '—' }}</strong><br><small>{{ item.area }}</small></td>
         <td>{{ item.responsable.nombre if item.responsable else '—' }}</td>
         <td><span class="status status-{{ item.estado|lower|replace(' ','-')|replace('ó','o') }}">{{ item.estado }}</span></td>
-        {% if es_super_admin %}<td>{{ item.creado_por }}</td>{% endif %}
+        {% if es_super_admin %}<td>{{ item.creador.nombre if item.creador else '—' }}{% if item.creador and item.creador.apellido %} {{ item.creador.apellido }}{% endif %}</td>{% endif %}
         <td>
           {% if item.estado == 'Pendiente de aprobación' and es_logistica %}
             <a class="btn btn-sm btn-primary" href="/activos/inventario-fisico/{{ item.id }}/revisar"><i class="bi bi-search"></i> Revisar</a>
@@ -133,7 +133,7 @@
 
   {% if levantamiento.estado == 'Aprobado' %}
   <div class="approval-box approved">
-    <i class="bi bi-check-circle-fill"></i> Aprobado por <strong>{{ levantamiento.aprobado_por }}</strong>{% if levantamiento.aprobado_at %} el {{ levantamiento.aprobado_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}.
+    <i class="bi bi-check-circle-fill"></i> Aprobado por <strong>{{ levantamiento.aprobador.nombre if levantamiento.aprobador else '—' }}{% if levantamiento.aprobador and levantamiento.aprobador.apellido %} {{ levantamiento.aprobador.apellido }}{% endif %}</strong>{% if levantamiento.aprobado_at %} el {{ levantamiento.aprobado_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}.
     {% if levantamiento.responsable %}
       <p class="help mt-2 mb-2">La aprobación ya realizó automáticamente la entrega de los elementos encontrados a <strong>{{ levantamiento.responsable.nombre }}</strong>. No es necesario volver a pasar por Entrega masiva.</p>
       <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/devolver-todo" onsubmit="return confirm('¿Confirmas que el docente devuelve todos los activos asignados por esta revisión? Los activos volverán a quedar disponibles en la ubicación y sin responsable.')">

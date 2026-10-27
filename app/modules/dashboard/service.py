@@ -48,6 +48,8 @@ class DashboardService:
         query = self.db.query(LevantamientoInventario).options(
             joinedload(LevantamientoInventario.ubicacion),
             joinedload(LevantamientoInventario.responsable),
+            joinedload(LevantamientoInventario.creador),
+            joinedload(LevantamientoInventario.aprobador),
         )
         if self.area != "Todas":
             query = query.filter(LevantamientoInventario.area == self.area)
