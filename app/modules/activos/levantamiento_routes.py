@@ -3,6 +3,7 @@ from io import BytesIO
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from openpyxl import load_workbook
+import pdfplumber
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -197,6 +198,151 @@ def editar_detalle(detalle_id: int, cantidad_encontrada: int = Form(...), estado
     return RedirectResponse(url=f"/activos/inventario-fisico/?levantamiento_id={levantamiento_id}", status_code=303)
 
 
+def _numero_cantidad(valor, defecto=1):
+    """Extrae el primer número de valores como '16 CAJAS' o '7 JUEGOS'."""
+    texto = str(valor or "").replace("\xa0", " ").strip()
+    if not texto:
+        return defecto
+    match = re.search(r"\d+(?:[.,]\d+)?", texto)
+    if not match:
+        return defecto
+    try:
+        return max(1, int(float(match.group(0).replace(",", "."))))
+    except (TypeError, ValueError):
+        return defecto
+
+
+def _categoria_pdf(texto):
+    """Limpia categorías verticales que algunos PDF guardan al revés."""
+    texto = str(texto or "").replace("\ufeff", "").strip()
+    if not texto:
+        return ""
+    partes = [p.strip() for p in texto.splitlines() if p.strip()]
+    unido = "".join(partes)
+    if len(partes) >= 2 and len(unido) >= 4:
+        # En el PDF institucional las celdas verticales llegan como letras
+        # invertidas: O/IR/A/ILIB/O/M -> OIRAILIBOM -> MOBILIARIO.
+        invertido = unido[::-1]
+        if invertido.isalpha() and len(invertido) >= 4:
+            return invertido
+    return " ".join(partes) if partes else texto
+
+
+def _fila_pdf_es_categoria(fila):
+    if not fila:
+        return ""
+    primero = str(fila[0] or "").strip()
+    segundo = str(fila[1] or "").strip() if len(fila) > 1 else ""
+    if not primero:
+        return ""
+    bruto = _normalizar(primero)
+    if any(x in bruto for x in ("gimnasiolossauces", "fechadeelaboracion", "edificio", "dependencia")):
+        return ""
+    limpio = _categoria_pdf(primero)
+    # Las categorías del PDF pueden ocupar la primera celda fusionada y
+    # compartir la misma fila con el primer elemento del bloque.
+    es_vertical = "\n" in primero and _normalizar(limpio).isalpha() and len(_normalizar(limpio)) >= 4
+    if not segundo and not es_vertical:
+        return ""
+    normal = _normalizar(limpio)
+    if not normal or normal in {"item", "observaciones", "revisadoyentregadoporverificadoyrecibidopor", "nota"}:
+        return ""
+    # Cabeceras/leyendas del documento no son categorías.
+    if any(x in normal for x in ("gimnasiolossauces", "fechadeelaboracion", "edificio", "dependencia")):
+        return ""
+    return limpio
+
+
+def _fila_pdf_item(fila):
+    if not fila or len(fila) < 2:
+        return None
+    nombre = " ".join(str(fila[1] or "").replace("\xa0", " ").split()).strip()
+    if not nombre:
+        return None
+    normal = _normalizar(nombre)
+    if normal in {"item", "elemento", "referencia", "cant", "cantidad", "observaciones", "revisadoyentregadoporverificadoyrecibidopor", "nota"}:
+        return None
+    if any(normal.startswith(x) for x in ("gimnasiolossauces", "fechadeelaboracion", "edificio", "dependencia")):
+        return None
+    referencia = " ".join(str(fila[2] or "").split()).strip() if len(fila) > 2 else ""
+    cantidad = _numero_cantidad(fila[3] if len(fila) > 3 else "", 1)
+    observacion = " ".join(str(fila[7] or "").replace("\xa0", " ").split()).strip() if len(fila) > 7 else ""
+    estado = "Bueno"
+    # En PDF B/R/M pueden venir como una marca, una X o un número.
+    estados = [(4, "Bueno"), (5, "Regular"), (6, "Malo")]
+    for idx, nombre_estado in estados:
+        if len(fila) > idx and str(fila[idx] or "").strip():
+            estado = nombre_estado
+            break
+    return {
+        "nombre": nombre,
+        "referencia": referencia,
+        "cantidad": cantidad,
+        "observacion": observacion,
+        "estado": estado,
+    }
+
+
+def _importar_filas_a_levantamiento(db, service, lev, filas, categoria_por_defecto):
+    creados = 0
+    categorias_creadas = 0
+    categoria_actual = None
+    for item in filas:
+        categoria_texto = item.get("categoria") if isinstance(item, dict) else None
+        if categoria_texto:
+            categoria_actual = categoria_texto
+            continue
+        nombre = item.get("nombre", "").strip()
+        if not nombre:
+            continue
+        referencia = item.get("referencia", "").strip()
+        marca = item.get("marca", "").strip()
+        modelo = item.get("modelo", "").strip()
+        serial = item.get("serial", "").strip()
+        obs = item.get("observacion", "").strip()
+        estado = item.get("estado", "Bueno").strip() or "Bueno"
+        cantidad = max(1, int(item.get("cantidad") or 1))
+
+        categoria_id = categoria_por_defecto
+        if categoria_actual:
+            cat = service.obtener_o_crear_categoria(categoria_actual, lev.empresa_id)
+            if cat:
+                categoria_id = cat.id
+                # Se cuenta como creación solo si fue agregada en esta sesión.
+                if cat.created_at is None:
+                    categorias_creadas += 1
+        if not categoria_id:
+            continue
+
+        existente = None
+        if referencia:
+            existente = db.query(Activo).filter(
+                Activo.empresa_id == lev.empresa_id,
+                Activo.ubicacion_id == lev.ubicacion_id,
+                Activo.activo.is_(True),
+                (Activo.codigo == referencia) | (Activo.codigo_barras == referencia) | (Activo.serial == referencia),
+            ).first()
+        if existente:
+            service.agregar_existente(lev.id, existente, min(1, cantidad), estado, obs)
+            creados += 1
+            continue
+
+        service.agregar_hallazgo(
+            lev.id,
+            nombre,
+            categoria_id,
+            cantidad,
+            estado,
+            obs,
+            referencia,
+            marca,
+            modelo,
+            serial,
+        )
+        creados += 1
+    return creados, categorias_creadas
+
+
 @router.post("/importar-excel")
 async def importar_excel(
     ubicacion_id: int = Form(...),
@@ -206,63 +352,75 @@ async def importar_excel(
     db: Session = Depends(get_db),
     user: Usuario = Depends(get_current_user),
 ):
-    if not archivo.filename.lower().endswith((".xlsx", ".xlsm")):
-        raise HTTPException(status_code=400, detail="Sube un archivo Excel .xlsx o .xlsm.")
+    nombre_archivo = (archivo.filename or "").lower()
+    if not nombre_archivo.endswith((".xlsx", ".xlsm", ".pdf")):
+        raise HTTPException(status_code=400, detail="Sube un archivo Excel (.xlsx/.xlsm) o PDF (.pdf).")
     try:
         contenido = await archivo.read()
-        wb = load_workbook(BytesIO(contenido), data_only=True)
-        ws = wb.active
-        header_row, cols = _buscar_encabezados(ws)
-        if not header_row:
-            raise ValueError("No encontré una fila de encabezados. Usa columnas como ELEMENTO, REFERENCIA, CANT., ESTADO y OBSERVACIÓN.")
-        area = "Todas"
         service = LevantamientoService(db)
-        lev = service.crear_borrador(ubicacion_id, responsable_id, area, user.id)
+        lev = service.crear_borrador(ubicacion_id, responsable_id, "Todas", user.id)
         creados = 0
-        for row in range(header_row + 1, ws.max_row + 1):
-            nombre = _valor_fila(ws, row, cols.get("nombre"))
-            if not nombre or _normalizar(nombre) in {"primero", "segundo", "tercero", "cuarto", "quinto", "sexto", "septimo", "octavo", "noveno", "decimo", "once"}:
-                continue
-            referencia = _valor_fila(ws, row, cols.get("referencia"))
-            marca = _valor_fila(ws, row, cols.get("marca"))
-            modelo = _valor_fila(ws, row, cols.get("modelo"))
-            serial = _valor_fila(ws, row, cols.get("serial"))
-            obs = _valor_fila(ws, row, cols.get("observacion"))
-            estado = _valor_fila(ws, row, cols.get("estado")) or "Bueno"
-            try:
-                cantidad = int(float(_valor_fila(ws, row, cols.get("cantidad")) or 1))
-            except ValueError:
-                cantidad = 1
-            categoria_id = categoria_por_defecto
-            categoria_texto = _valor_fila(ws, row, cols.get("categoria"))
-            if categoria_texto:
-                cat = CategoriaService(db).buscar_nombre(categoria_texto)
-                if cat:
-                    categoria_id = cat.id
-            # Si la referencia coincide con un activo que ya está en esa ubicación,
-            # se vincula al levantamiento en vez de crear un duplicado.
-            existente = None
-            if referencia:
-                existente = db.query(Activo).filter(
-                    Activo.ubicacion_id == ubicacion_id,
-                    Activo.activo.is_(True),
-                    (Activo.codigo == referencia) | (Activo.codigo_barras == referencia) | (Activo.serial == referencia),
-                ).first()
-            if existente:
-                service.agregar_existente(lev.id, existente, min(1, max(0, cantidad)), estado, obs)
-                creados += 1
-                continue
-            if not categoria_id:
-                continue
-            service.agregar_hallazgo(lev.id, nombre, categoria_id, max(1, cantidad), estado, obs, referencia, marca, modelo, serial)
-            creados += 1
+        categorias_creadas = 0
+
+        if nombre_archivo.endswith(".pdf"):
+            filas = []
+            categoria_actual = None
+            with pdfplumber.open(BytesIO(contenido)) as pdf:
+                for page in pdf.pages:
+                    for tabla in page.extract_tables() or []:
+                        for fila in tabla:
+                            categoria = _fila_pdf_es_categoria(fila)
+                            if categoria:
+                                categoria_actual = categoria
+                            item = _fila_pdf_item(fila)
+                            if item:
+                                item["categoria"] = None
+                                # Mantiene la categoría del bloque ITEM hasta
+                                # encontrar otra categoría en el documento.
+                                filas.append({"categoria": categoria_actual, **item})
+            if not filas:
+                raise ValueError("No encontré filas de inventario en el PDF. El PDF debe conservar la tabla con ITEM, ELEMENTO, CANT. y OBSERVACIÓN.")
+            creados, categorias_creadas = _importar_filas_a_levantamiento(db, service, lev, filas, categoria_por_defecto)
+        else:
+            wb = load_workbook(BytesIO(contenido), data_only=True)
+            ws = wb.active
+            header_row, cols = _buscar_encabezados(ws)
+            if not header_row:
+                raise ValueError("No encontré una fila de encabezados. Usa columnas como ELEMENTO, REFERENCIA, CANT., CATEGORÍA, ESTADO y OBSERVACIÓN.")
+
+            filas = []
+            categoria_actual = None
+            for row in range(header_row + 1, ws.max_row + 1):
+                # Permite archivos donde CATEGORÍA viene en una celda combinada
+                # y queda vacía en las filas siguientes.
+                categoria_texto = _valor_fila(ws, row, cols.get("categoria"))
+                if categoria_texto:
+                    categoria_actual = categoria_texto
+                nombre = _valor_fila(ws, row, cols.get("nombre"))
+                if not nombre or _normalizar(nombre) in {"primero", "segundo", "tercero", "cuarto", "quinto", "sexto", "septimo", "octavo", "noveno", "decimo", "once"}:
+                    continue
+                categoria_fila = categoria_texto or categoria_actual
+                filas.append({
+                    "nombre": nombre,
+                    "categoria": categoria_fila,
+                    "referencia": _valor_fila(ws, row, cols.get("referencia")),
+                    "marca": _valor_fila(ws, row, cols.get("marca")),
+                    "modelo": _valor_fila(ws, row, cols.get("modelo")),
+                    "serial": _valor_fila(ws, row, cols.get("serial")),
+                    "observacion": _valor_fila(ws, row, cols.get("observacion")),
+                    "estado": _valor_fila(ws, row, cols.get("estado")) or "Bueno",
+                    "cantidad": _numero_cantidad(_valor_fila(ws, row, cols.get("cantidad")), 1),
+                })
+            creados, categorias_creadas = _importar_filas_a_levantamiento(db, service, lev, filas, categoria_por_defecto)
+
         if not creados:
-            raise ValueError("El Excel no produjo filas válidas. Revisa que tenga ELEMENTO y una categoría por defecto o una columna CATEGORÍA.")
+            raise ValueError("El archivo no produjo filas válidas. Revisa que tenga ELEMENTO y una categoría por defecto o una columna CATEGORÍA.")
+        db.commit()
     except Exception as exc:
         db.rollback()
         if isinstance(exc, ValueError):
             raise HTTPException(status_code=400, detail=str(exc))
-        raise HTTPException(status_code=400, detail=f"No se pudo leer el Excel: {exc}")
+        raise HTTPException(status_code=400, detail=f"No se pudo importar el archivo: {exc}")
     return RedirectResponse(url=f"/activos/inventario-fisico/?levantamiento_id={lev.id}", status_code=303)
 
 
