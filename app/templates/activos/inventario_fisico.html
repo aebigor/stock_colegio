@@ -32,14 +32,14 @@
   </section>
 
   <section class="physical-card import-card">
-    <div class="card-title"><i class="bi bi-file-earmark-arrow-up"></i> Cargar Excel o PDF del docente</div>
-    <p class="help">El archivo se convierte en un <strong>levantamiento en borrador</strong>; no crea activos inmediatamente. Puedes subir el Excel o el PDF que usa Logística. La ubicación y el responsable se toman de este formulario, las categorías que vengan escritas en el archivo se crean automáticamente si todavía no existen y Logística puede revisar duplicados antes de aprobar.</p>
+    <div class="card-title"><i class="bi bi-file-earmark-excel"></i> Cargar Excel o PDF del docente</div>
+    <p class="help">El archivo se convierte en un <strong>levantamiento en borrador</strong>; no crea activos inmediatamente. Así Logística puede revisar duplicados y aprobar solamente los elementos nuevos.</p>
     <form method="post" action="/activos/inventario-fisico/importar-excel" enctype="multipart/form-data" class="row g-3">
       <div class="col-md-6"><label>Ubicación *</label><select name="ubicacion_id" required><option value="">Seleccione...</option>{% for u in ubicaciones %}<option value="{{ u.id }}">{{ u.nombre }} · {{ u.area }}</option>{% endfor %}</select></div>
       <div class="col-md-6"><label>Categoría por defecto</label><select name="categoria_por_defecto"><option value="">Usar columna CATEGORÍA</option>{% for c in categorias %}<option value="{{ c.id }}">{{ c.nombre }}</option>{% endfor %}</select></div>
       <div class="col-md-6"><label>Responsable / docente</label><select name="responsable_id"><option value="">Sin responsable</option>{% for p in personas %}<option value="{{ p.id }}">{{ p.nombre }}{% if p.cargo %} · {{ p.cargo }}{% endif %}</option>{% endfor %}</select></div>
       <div class="col-md-6"><label>Archivo Excel o PDF</label><input type="file" name="archivo" accept=".xlsx,.xlsm,.pdf" required></div>
-      <div class="col-12"><small class="help">Excel: se reconocen <strong>ELEMENTO, REFERENCIA, CANT., CATEGORÍA, ESTADO y OBSERVACIÓN</strong>. PDF: se detectan los bloques de <strong>ITEM/ELEMENTO, REFERENCIA, CANT., ESTADO y OBSERVACIÓN</strong>; también se toman las categorías verticales del documento.</small></div>
+      <div class="col-12"><small class="help">Excel: se reconocen <strong>ELEMENTO, REFERENCIA, CANT., CATEGORÍA, ESTADO y OBSERVACIÓN</strong>. PDF: se detectan automáticamente los elementos, cantidades y categorías verticales del formato de inventario.</small></div>
       <div class="col-12"><button class="btn btn-outline-primary"><i class="bi bi-upload"></i> Importar como borrador</button></div>
     </form>
   </section>
