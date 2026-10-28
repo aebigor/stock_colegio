@@ -13,56 +13,6 @@ class LevantamientoService:
     def __init__(self, db: Session):
         self.db = db
 
-    def obtener_o_crear_categoria(self, nombre, empresa_id):
-        """Obtiene una categoría existente o crea una nueva para la empresa.
-
-        Se usa durante la importación de inventarios para que categorías que
-        vienen escritas en el archivo (por ejemplo MOBILIARIO) no obliguen a
-        Logística a crear la categoría manualmente antes de cargar el archivo.
-        """
-        nombre = " ".join(str(nombre or "").split()).strip()
-        if not nombre:
-            return None
-
-        existente = (
-            self.db.query(Categoria)
-            .filter(Categoria.empresa_id == empresa_id, Categoria.nombre.ilike(nombre))
-            .first()
-        )
-        if existente:
-            return existente
-
-        palabras = [p for p in nombre.upper().split() if p]
-        base = "".join(p[0] for p in palabras) if len(palabras) > 1 else (palabras[0] if palabras else "CAT")
-        base = "".join(ch for ch in base if ch.isalnum())[:8] or "CAT"
-        prefijo = base
-        n = 2
-        while self.db.query(Categoria.id).filter(
-            Categoria.empresa_id == empresa_id, Categoria.prefijo.ilike(prefijo)
-        ).first():
-            sufijo = str(n)
-            prefijo = (base[: max(1, 8 - len(sufijo))] + sufijo)[:8]
-            n += 1
-
-        categoria = Categoria(
-            empresa_id=empresa_id,
-            nombre=nombre,
-            prefijo=prefijo,
-            descripcion="Categoría creada automáticamente al importar un inventario.",
-            icono="bi-box-seam",
-            color="#00E5FF",
-            permite_prestamo=True,
-            requiere_firma=False,
-            requiere_protocolo=False,
-            requiere_mantenimiento=False,
-            genera_qr=True,
-            genera_codigo_barras=True,
-            activo=True,
-        )
-        self.db.add(categoria)
-        self.db.flush()
-        return categoria
-
     def listar(self, area="Todas"):
         q = self.db.query(LevantamientoInventario).options(
             joinedload(LevantamientoInventario.ubicacion),
@@ -250,6 +200,23 @@ class LevantamientoService:
         d.cantidad_encontrada = max(0, int(cantidad_encontrada))
         d.estado_fisico = estado_fisico
         d.observacion = observacion.strip() or None
+        self.db.commit()
+
+    def eliminar(self, levantamiento_id):
+        """Elimina un levantamiento de prueba mientras siga en Borrador.
+
+        Los detalles se eliminan en cascada; no se toca ningún Activo ni
+        Movimiento porque durante el borrador todavía no se han incorporado
+        al inventario maestro.
+        """
+        lev = self.db.query(LevantamientoInventario).filter(
+            LevantamientoInventario.id == levantamiento_id
+        ).first()
+        if not lev:
+            raise ValueError("Levantamiento no encontrado.")
+        if lev.estado != "Borrador":
+            raise ValueError("Solo se pueden eliminar levantamientos en Borrador.")
+        self.db.delete(lev)
         self.db.commit()
 
     def enviar(self, levantamiento_id, firma=""):

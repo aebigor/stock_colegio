@@ -32,14 +32,14 @@
   </section>
 
   <section class="physical-card import-card">
-    <div class="card-title"><i class="bi bi-file-earmark-excel"></i> Cargar Excel o PDF del docente</div>
-    <p class="help">El archivo se convierte en un <strong>levantamiento en borrador</strong>; no crea activos inmediatamente. Así Logística puede revisar duplicados y aprobar solamente los elementos nuevos.</p>
+    <div class="card-title"><i class="bi bi-file-earmark-excel"></i> Cargar Excel del docente</div>
+    <p class="help">El Excel se convierte en un <strong>levantamiento en borrador</strong>; no crea activos inmediatamente. Así Logística puede revisar duplicados y aprobar solamente los elementos nuevos.</p>
     <form method="post" action="/activos/inventario-fisico/importar-excel" enctype="multipart/form-data" class="row g-3">
       <div class="col-md-6"><label>Ubicación *</label><select name="ubicacion_id" required><option value="">Seleccione...</option>{% for u in ubicaciones %}<option value="{{ u.id }}">{{ u.nombre }} · {{ u.area }}</option>{% endfor %}</select></div>
       <div class="col-md-6"><label>Categoría por defecto</label><select name="categoria_por_defecto"><option value="">Usar columna CATEGORÍA</option>{% for c in categorias %}<option value="{{ c.id }}">{{ c.nombre }}</option>{% endfor %}</select></div>
       <div class="col-md-6"><label>Responsable / docente</label><select name="responsable_id"><option value="">Sin responsable</option>{% for p in personas %}<option value="{{ p.id }}">{{ p.nombre }}{% if p.cargo %} · {{ p.cargo }}{% endif %}</option>{% endfor %}</select></div>
-      <div class="col-md-6"><label>Archivo Excel o PDF</label><input type="file" name="archivo" accept=".xlsx,.xlsm,.pdf" required></div>
-      <div class="col-12"><small class="help">Excel: se reconocen <strong>ELEMENTO, REFERENCIA, CANT., CATEGORÍA, ESTADO y OBSERVACIÓN</strong>. PDF: se detectan automáticamente los elementos, cantidades y categorías verticales del formato de inventario.</small></div>
+      <div class="col-md-6"><label>Archivo Excel</label><input type="file" name="archivo" accept=".xlsx,.xlsm" required></div>
+      <div class="col-12"><small class="help">Se reconocen columnas como <strong>ELEMENTO, REFERENCIA, CANT., CATEGORÍA, ESTADO y OBSERVACIÓN</strong>.</small></div>
       <div class="col-12"><button class="btn btn-outline-primary"><i class="bi bi-upload"></i> Importar como borrador</button></div>
     </form>
   </section>
@@ -63,6 +63,11 @@
             <a class="btn btn-sm btn-primary" href="/activos/inventario-fisico/{{ item.id }}/revisar"><i class="bi bi-search"></i> Revisar</a>
           {% else %}
             <a class="btn btn-sm btn-outline-primary" href="/activos/inventario-fisico/?levantamiento_id={{ item.id }}">{{ 'Ver' if item.estado != 'Borrador' else 'Abrir' }}</a>
+          {% endif %}
+          {% if item.estado == 'Borrador' and (es_logistica or item.creado_por == current_user_id|default(-1)) %}
+            <form method="post" action="/activos/inventario-fisico/{{ item.id }}/eliminar" style="display:inline" onsubmit="return confirm('¿Eliminar este levantamiento de prueba? Solo se borrará el borrador y sus detalles; no se eliminarán activos del inventario.')">
+              <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Eliminar</button>
+            </form>
           {% endif %}
         </td>
       </tr>
@@ -123,7 +128,12 @@
   </div>
 
   <div class="actions-bar mt-4">
-    <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/enviar"><button class="btn btn-primary" onclick="return confirm('Al enviar, el levantamiento quedará bloqueado para edición. ¿Continuar?')"><i class="bi bi-lock"></i> Enviar a Logística y bloquear</button></form>
+    <div class="public-link-note">
+      <strong><i class="bi bi-send"></i> Próximo paso: enviar al docente</strong>
+      <p class="help mb-2">Este usuario no debe enviar el levantamiento directamente. Comparte el enlace con el docente; él revisará cantidades, estado, observaciones y firmará. Al pulsar <strong>Enviar a Logística</strong> desde ese enlace, el levantamiento quedará bloqueado para que Logística lo revise y apruebe.</p>
+      <code>{{ request.base_url }}inventario-fisico-publico/{{ levantamiento.public_token }}</code>
+      <button type="button" class="btn btn-sm btn-outline-primary ms-2" onclick="navigator.clipboard.writeText('{{ request.base_url }}inventario-fisico-publico/{{ levantamiento.public_token }}')"><i class="bi bi-copy"></i> Copiar enlace</button>
+    </div>
   </div>
   {% endif %}
 
