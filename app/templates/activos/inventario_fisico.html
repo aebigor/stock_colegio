@@ -152,6 +152,12 @@
     {% endif %}
   </div>
   {% endif %}
+  {% if levantamiento.estado == 'Devuelto' %}
+  <div class="approval-box approved">
+    <i class="bi bi-check-circle-fill"></i> <strong>Devolución registrada.</strong>
+    <p class="help mt-2 mb-0">Los activos de este levantamiento fueron devueltos a la ubicación de origen y quedaron sin responsable. La devolución ya está registrada y no se puede ejecutar nuevamente desde aquí.</p>
+  </div>
+  {% endif %}
 </section>
 {% endif %}
 {% endblock %}

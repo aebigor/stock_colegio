@@ -38,7 +38,9 @@ class LevantamientoService:
         return q.first()
 
     def crear_borrador(self, ubicacion_id, responsable_id, area, usuario_id):
-        ubicacion = self.db.query(Ubicacion).filter(Ubicacion.id == ubicacion_id, Ubicacion.area == area).first() if area != "Todas" else self.db.query(Ubicacion).filter(Ubicacion.id == ubicacion_id).first()
+        # El área del inventario depende del usuario que crea el levantamiento
+        # (Logística/Medios), no del campo descriptivo de la ubicación (p. ej. General).
+        ubicacion = self.db.query(Ubicacion).filter(Ubicacion.id == ubicacion_id).first()
         if not ubicacion:
             raise ValueError("La ubicación seleccionada no es válida.")
         responsable = self.db.query(Persona).filter(Persona.id == responsable_id).first() if responsable_id else None
@@ -47,15 +49,18 @@ class LevantamientoService:
             responsable_id=responsable.id if responsable else None,
             estado="Borrador",
             creado_por=usuario_id,
-            area=ubicacion.area,
+            area=area if area != "Todas" else "Medios",
             public_token=token_urlsafe(48),
         )
         self.db.add(levantamiento)
         self.db.flush()
-        activos = self.db.query(Activo).filter(
+        activos_q = self.db.query(Activo).filter(
             Activo.ubicacion_id == ubicacion.id,
             Activo.activo.is_(True),
-        ).order_by(Activo.nombre, Activo.id).all()
+        )
+        if area != "Todas":
+            activos_q = activos_q.filter(Activo.area == area)
+        activos = activos_q.order_by(Activo.nombre, Activo.id).all()
         for activo in activos:
             self.db.add(LevantamientoDetalle(
                 empresa_id=ubicacion.empresa_id,
@@ -273,8 +278,9 @@ class LevantamientoService:
                 # La ubicación del levantamiento sigue siendo la ubicación
                 # registrada del activo. La custodia queda en el docente.
                 activo.ubicacion_id = lev.ubicacion_id
-                detalle_fisico = f"Estado físico verificado: {d.estado_fisico}."
-                activo.observaciones = " ".join(x for x in [detalle_fisico, d.observacion, activo.observaciones] if x)
+                # Un levantamiento no debe sobrescribir las observaciones históricas del activo.
+                # El estado físico y la observación del docente quedan en el detalle y movimiento.
+                activo.area = lev.area
                 self.db.add(Movimiento(
                     empresa_id=lev.empresa_id,
                     activo_id=activo.id,
@@ -321,7 +327,7 @@ class LevantamientoService:
                         responsable_id=lev.responsable_id,
                         tenedor_id=lev.responsable_id,
                         qr=codigo_barras,
-                        observaciones=" ".join(x for x in [f"Estado físico verificado: {d.estado_fisico}.", d.observacion] if x),
+                        observaciones=d.observacion.strip() or None,
                         area=lev.area,
                         activo=True,
                     )
@@ -348,7 +354,7 @@ class LevantamientoService:
                     ))
                     creados += 1
                     entregados += 1
-                d.observacion = (d.observacion or "") + f" [Incorporado y entregado al responsable al aprobar levantamiento #{lev.id}.]"
+                # No modificar d.observacion: es exactamente lo que escribió el docente.
 
         lev.estado = "Aprobado"
         lev.aprobado_por = usuario_id
@@ -369,19 +375,23 @@ class LevantamientoService:
         # puede representar varias unidades y cada una obtiene su propio
         # registro de Activo. Las recuperamos por el movimiento de entrega
         # generado al aprobar este levantamiento.
-        marca = f"levantamiento físico #{lev.id}"
+        from sqlalchemy import or_
         movimientos_entrega = (
             self.db.query(Movimiento)
             .filter(
+                Movimiento.empresa_id == lev.empresa_id,
                 Movimiento.tipo == "Entrega",
-                Movimiento.observaciones.ilike(f"%{marca}%"),
                 Movimiento.persona_id == lev.responsable_id,
+                or_(
+                    Movimiento.observaciones.ilike(f"%levantamiento físico #{lev.id}%"),
+                    Movimiento.observaciones.ilike(f"%levantamiento #{lev.id}%"),
+                ),
             )
             .all()
         )
         activo_ids = {m.activo_id for m in movimientos_entrega}
         if not activo_ids:
-            raise ValueError("No hay activos entregados por este levantamiento para devolver.")
+            raise ValueError("No se encontraron movimientos de entrega vinculados a este levantamiento.")
 
         devueltos = 0
         for activo_id in activo_ids:
@@ -409,6 +419,9 @@ class LevantamientoService:
             ))
             devueltos += 1
 
+        # También sincroniza levantamientos antiguos cuyos activos ya fueron
+        # devueltos por el flujo de Entrega/Devolución masiva.
+        lev.estado = "Devuelto"
         self.db.commit()
         return devueltos
 

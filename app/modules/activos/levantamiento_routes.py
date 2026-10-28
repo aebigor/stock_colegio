@@ -124,17 +124,15 @@ def docente_enviar(token: str, firma: str = Form(""), db: Session = Depends(get_
 def index(request: Request, levantamiento_id: int | None = None, db: Session = Depends(get_db), user: Usuario = Depends(get_current_user)):
     # El control físico debe permitir revisar cualquier ubicación de la empresa,
     # independientemente del área del usuario que está diligenciando.
-    area = "Todas"
-    service = LevantamientoService(db)
+    area = user_area(user)
+    es_super_admin = bool(user.rol and user.rol.nombre in SUPER_ADMIN_ROLES)
     es_logistica = _es_logistica(user)
-    if es_logistica:
-        levantamientos = service.listar("Todas")
-    else:
-        todos = service.listar("Todas")
-        nombre_actual = _nombre_usuario(user)
-        levantamientos = [x for x in todos if x.creado_por == user.id]
-    levantamiento = service.obtener(levantamiento_id, "Todas") if levantamiento_id else None
-    if levantamiento and not es_logistica and levantamiento.creado_por != user.id:
+    service = LevantamientoService(db)
+    # Solo Super Admin ve ambas áreas. Logística y Medios ven su propio inventario.
+    area_consulta = "Todas" if es_super_admin else area
+    levantamientos = service.listar(area_consulta)
+    levantamiento = service.obtener(levantamiento_id, area_consulta) if levantamiento_id else None
+    if levantamiento and not es_super_admin and levantamiento.area != area:
         levantamiento = None
     ubicaciones = UbicacionService(db).listar("Todas")
     personas = PersonaService(db).listar()
@@ -153,7 +151,7 @@ def index(request: Request, levantamiento_id: int | None = None, db: Session = D
             "usuario_actual": _nombre_usuario(user),
             "current_user_id": user.id,
             "es_logistica": es_logistica,
-            "es_super_admin": bool(user.rol and user.rol.nombre in SUPER_ADMIN_ROLES),
+            "es_super_admin": es_super_admin,
         },
     )
 
@@ -161,7 +159,7 @@ def index(request: Request, levantamiento_id: int | None = None, db: Session = D
 @router.post("/crear")
 def crear(ubicacion_id: int = Form(...), responsable_id: int | None = Form(None), db: Session = Depends(get_db), user: Usuario = Depends(get_current_user)):
     try:
-        lev = LevantamientoService(db).crear_borrador(ubicacion_id, responsable_id, "Todas", user.id)
+        lev = LevantamientoService(db).crear_borrador(ubicacion_id, responsable_id, user_area(user), user.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return RedirectResponse(url=f"/activos/inventario-fisico/?levantamiento_id={lev.id}", status_code=303)
@@ -216,7 +214,7 @@ async def importar_excel(
         header_row, cols = _buscar_encabezados(ws)
         if not header_row:
             raise ValueError("No encontré una fila de encabezados. Usa columnas como ELEMENTO, REFERENCIA, CANT., ESTADO y OBSERVACIÓN.")
-        area = "Todas"
+        area = user_area(user)
         service = LevantamientoService(db)
         lev = service.crear_borrador(ubicacion_id, responsable_id, area, user.id)
         creados = 0
@@ -269,14 +267,16 @@ async def importar_excel(
 
 @router.get("/{levantamiento_id}/revisar", response_class=HTMLResponse)
 def revisar(levantamiento_id: int, request: Request, db: Session = Depends(get_db), user: Usuario = Depends(require_roles("Super Admin", "Superadministrador", "Administrador de Logística", "Admin de Logística"))):
-    lev = LevantamientoService(db).obtener(levantamiento_id, "Todas")
+    area_consulta = user_area(user)
+    lev = LevantamientoService(db).obtener(levantamiento_id, area_consulta)
     if not lev:
-        raise HTTPException(status_code=404, detail="Levantamiento no encontrado.")
+        raise HTTPException(status_code=404, detail="Levantamiento no encontrado en tu área.")
     return templates.TemplateResponse(request=request, name="activos/inventario_fisico.html", context={
         "title": "Revisar inventario físico", "levantamientos": LevantamientoService(db).listar("Todas"),
         "levantamiento": lev, "ubicaciones": UbicacionService(db).listar("Todas"),
         "personas": PersonaService(db).listar(), "categorias": CategoriaService(db).listar(estado="Activas"),
-        "area": "Todas", "usuario_actual": _nombre_usuario(user), "es_logistica": True, "modo_revision": True,
+        "area": area_consulta, "usuario_actual": _nombre_usuario(user), "es_logistica": True, "modo_revision": True,
+        "es_super_admin": bool(user.rol and user.rol.nombre in SUPER_ADMIN_ROLES), "current_user_id": user.id,
     })
 
 
@@ -330,7 +330,9 @@ def enviar(levantamiento_id: int, firma: str = Form(""), db: Session = Depends(g
 
 @router.post("/{levantamiento_id}/aprobar")
 def aprobar(levantamiento_id: int, db: Session = Depends(get_db), user: Usuario = Depends(require_roles("Super Admin", "Superadministrador", "Administrador de Logística", "Admin de Logística"))):
-    area = "Todas"
+    area = user_area(user)
+    if area == "Todas":
+        area = "Todas"
     lev = LevantamientoService(db).obtener(levantamiento_id, area)
     if not lev:
         raise HTTPException(status_code=404, detail="Levantamiento no encontrado.")
@@ -343,6 +345,10 @@ def aprobar(levantamiento_id: int, db: Session = Depends(get_db), user: Usuario 
 
 @router.post("/{levantamiento_id}/devolver-todo")
 def devolver_todo(levantamiento_id: int, db: Session = Depends(get_db), user: Usuario = Depends(require_roles("Super Admin", "Superadministrador", "Administrador de Logística", "Admin de Logística"))):
+    area = user_area(user)
+    lev = LevantamientoService(db).obtener(levantamiento_id, area)
+    if not lev:
+        raise HTTPException(status_code=404, detail="Levantamiento no encontrado en tu área.")
     try:
         devueltos = LevantamientoService(db).devolver_todo(levantamiento_id, _nombre_usuario(user))
     except ValueError as exc:
