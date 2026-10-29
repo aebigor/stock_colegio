@@ -12,9 +12,12 @@ class MovimientoService:
     def __init__(self, db: Session):
         self.db = db
 
-    def crear(self, datos: MovimientoCreate, area: str = "Todas", usuario: str | None = None):
+    def crear(
+        self, datos: MovimientoCreate, area: str = "Todas", usuario: str | None = None,
+        permitir_cambio_area: bool = False,
+    ):
         query = self.db.query(Activo).filter(Activo.id == datos.activo_id)
-        if area != "Todas":
+        if area != "Todas" and not permitir_cambio_area:
             query = query.filter(Activo.area == area)
         activo = query.first()
         if activo is None:
@@ -28,9 +31,16 @@ class MovimientoService:
                 return None
         if datos.ubicacion_id:
             ubicacion = self.db.query(Ubicacion).filter(Ubicacion.id == datos.ubicacion_id).first()
-            if ubicacion is None or ubicacion.area != activo.area:
+            if ubicacion is None:
+                return None
+            if not permitir_cambio_area and ubicacion.area != activo.area:
                 return None
             activo.ubicacion_id = datos.ubicacion_id
+
+        # El área de un activo cambia únicamente al confirmar una entrega entre áreas.
+        # Así, antes de entregar se busca por ubicación; después queda a cargo del área operadora.
+        if permitir_cambio_area and datos.tipo == "Entrega" and datos.area in {"Medios", "Logística"}:
+            activo.area = datos.area
         activo.estado = datos.estado
 
         # La responsabilidad institucional no se pierde cuando el activo

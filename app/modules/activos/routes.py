@@ -150,7 +150,9 @@ def entrega_masiva(
     if operacion not in {"Entrega", "Devolucion"}:
         operacion = "Entrega"
 
-    ubicaciones = UbicacionService(db).listar(area)
+    # En entrega/devolución la ubicación es el punto físico de búsqueda, no el propietario del inventario.
+    # Mostrar todas las ubicaciones de la empresa permite a Logística o Medios asumir su custodia al entregar.
+    ubicaciones = UbicacionService(db).listar("Todas")
     personas = PersonaService(db).listar()
     activos = []
     ubicacion = None
@@ -159,11 +161,12 @@ def entrega_masiva(
 
     if operacion == "Entrega":
         if ubicacion_id:
-            ubicacion = UbicacionService(db).obtener(ubicacion_id, area)
+            ubicacion = UbicacionService(db).obtener(ubicacion_id, "Todas")
             if ubicacion is not None:
-                activos = ActivoService(db).listar_disponibles_por_ubicacion(ubicacion.id, area)
+                # Buscar por ubicación y empresa; no filtrar por el área anterior del activo.
+                activos = ActivoService(db).listar_disponibles_por_ubicacion(ubicacion.id, "Todas")
         if ubicacion_destino_id:
-            ubicacion_destino = UbicacionService(db).obtener(ubicacion_destino_id, area)
+            ubicacion_destino = UbicacionService(db).obtener(ubicacion_destino_id, "Todas")
         if persona_id:
             persona = PersonaService(db).obtener(persona_id)
     else:
@@ -238,8 +241,10 @@ def guardar_entrega_masiva(
             raise HTTPException(status_code=400, detail="Debes seleccionar la ubicación de origen.")
         if not ubicacion_destino_id:
             raise HTTPException(status_code=400, detail="Debes seleccionar la ubicación donde quedarán los activos.")
-        ubicacion_origen = UbicacionService(db).obtener(ubicacion_id, area)
-        ubicacion_destino = UbicacionService(db).obtener(ubicacion_destino_id, area)
+        # Las ubicaciones no se restringen por área: pertenecen a la empresa y
+        # el área responsable cambia solo cuando la entrega se confirma.
+        ubicacion_origen = UbicacionService(db).obtener(ubicacion_id, "Todas")
+        ubicacion_destino = UbicacionService(db).obtener(ubicacion_destino_id, "Todas")
         if ubicacion_origen is None:
             raise HTTPException(status_code=400, detail="La ubicación de origen no es válida.")
         if ubicacion_destino is None:
@@ -256,7 +261,9 @@ def guardar_entrega_masiva(
     ).strip() or user.usuario
 
     for activo_id in dict.fromkeys(activo_ids):
-        activo = service.obtener(activo_id, area)
+        # Un activo puede estar físicamente en esta ubicación aunque su área
+        # registrada sea otra. El filtro de empresa sigue activo en SQLAlchemy.
+        activo = service.obtener(activo_id, "Todas") if operacion == "Entrega" else service.obtener(activo_id, area)
         if activo is None or not activo.activo:
             continue
 
@@ -318,10 +325,14 @@ def guardar_entrega_masiva(
             observaciones=" ".join(partes),
             usuario=nombre_usuario,
             firma=firma,
-            area=activo.area,
+            # En una entrega real, la custodia pasa al área que realiza la operación.
+            area=(area if operacion == "Entrega" and area in {"Medios", "Logística"} else activo.area),
             liberar_responsable=liberar_responsable,
         )
-        movimiento = MovimientoService(db).crear(datos, area=area, usuario=nombre_usuario)
+        movimiento = MovimientoService(db).crear(
+            datos, area=("Todas" if operacion == "Entrega" else area),
+            usuario=nombre_usuario, permitir_cambio_area=(operacion == "Entrega"),
+        )
         if movimiento:
             procesados += 1
 
