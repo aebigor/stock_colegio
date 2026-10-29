@@ -15,21 +15,20 @@ class ActivoService:
 
     @staticmethod
     def _aplicar_area(query, area: str | None):
-        """Filtra por inventario sin ocultar activos antiguos mal clasificados.
+        """Aplica el ámbito del inventario usando también la ubicación.
 
-        Algunas cargas/levantamientos anteriores guardaron el área como
-        ``General`` aunque la ubicación ya pertenecía a Logística o Medios.
-        En ese caso se toma como fuente de verdad el área de la ubicación.
-        Esto no mezcla inventarios: solo admite el registro heredado cuando
-        su ubicación pertenece exactamente al área solicitada.
+        En datos históricos, activos importados desde Excel o creados antes de
+        separar las áreas pueden tener Activo.area="General" o el área anterior.
+        Para que el inventario físico sea coherente, la ubicación es la fuente
+        de verdad del ámbito operativo: si la ubicación pertenece a Logística,
+        sus activos son visibles para Logística aunque el campo Activo.area esté
+        desactualizado. El filtro multiempresa sigue siendo aplicado por SQLAlchemy.
         """
         if area and area != "Todas":
-            query = query.filter(
-                or_(
-                    Activo.area == area,
-                    (Activo.area == "General") & Activo.ubicacion.has(Ubicacion.area == area),
-                )
-            )
+            # La ubicación es la fuente de verdad para evitar que un activo
+            # aparezca simultáneamente en Logística y Medios por tener un área
+            # antigua guardada en Activo.area.
+            query = query.filter(Activo.ubicacion.has(Ubicacion.area == area))
         return query
 
     def listar(
@@ -230,7 +229,12 @@ class ActivoService:
             Activo.estado == "Disponible",
             Activo.activo.is_(True),
         )
-        return self._aplicar_area(query, area).order_by(Activo.nombre, Activo.id).all()
+        # La ubicación seleccionada define qué artículos se pueden entregar.
+        # No se filtra por Activo.area aquí: los registros antiguos pueden estar
+        # marcados como General/Medios aunque ya estén físicamente en esta bodega.
+        # La ruta valida que la ubicación pertenezca al área permitida del usuario,
+        # y el aislamiento de empresa se aplica a la consulta automáticamente.
+        return query.order_by(Activo.nombre, Activo.id).all()
 
     def listar_prestados_por_responsable(self, persona_id: int, area: str = "Todas"):
         # Primero usa la responsabilidad persistente. Para activos entregados

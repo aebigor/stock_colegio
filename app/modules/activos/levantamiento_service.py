@@ -43,6 +43,10 @@ class LevantamientoService:
         ubicacion = self.db.query(Ubicacion).filter(Ubicacion.id == ubicacion_id).first()
         if not ubicacion:
             raise ValueError("La ubicación seleccionada no es válida.")
+        # Los usuarios de área solo pueden levantar ubicaciones de su propio
+        # inventario. El Super Admin (area="Todas") puede trabajar con cualquiera.
+        if area != "Todas" and ubicacion.area != area:
+            raise ValueError("La ubicación seleccionada no pertenece a tu inventario.")
         responsable = self.db.query(Persona).filter(Persona.id == responsable_id).first() if responsable_id else None
         levantamiento = LevantamientoInventario(
             ubicacion_id=ubicacion.id,
@@ -54,18 +58,19 @@ class LevantamientoService:
         )
         self.db.add(levantamiento)
         self.db.flush()
-        activos_q = self.db.query(Activo).filter(
-            Activo.ubicacion_id == ubicacion.id,
-            Activo.activo.is_(True),
-        )
-        if area != "Todas":
-            # Compatibilidad con activos heredados que quedaron como General
-            # aunque la ubicación ya pertenece al inventario de este usuario.
-            activos_q = activos_q.filter(
-                (Activo.area == area)
-                | ((Activo.area == "General") & Activo.ubicacion.has(Ubicacion.area == area))
+        # El levantamiento físico es por ubicación, no por Activo.area. Esto es
+        # importante para activos antiguos/importados desde Excel que quedaron
+        # con area="General" o "Medios" aunque estén en una ubicación de Logística.
+        # El tenant actual ya limita la consulta a la empresa del usuario.
+        activos = (
+            self.db.query(Activo)
+            .filter(
+                Activo.ubicacion_id == ubicacion.id,
+                Activo.activo.is_(True),
             )
-        activos = activos_q.order_by(Activo.nombre, Activo.id).all()
+            .order_by(Activo.nombre, Activo.id)
+            .all()
+        )
         for activo in activos:
             self.db.add(LevantamientoDetalle(
                 empresa_id=ubicacion.empresa_id,
