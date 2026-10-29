@@ -58,10 +58,10 @@ class LevantamientoService:
             Activo.ubicacion_id == ubicacion.id,
             Activo.activo.is_(True),
         )
-        # La ubicación es la fuente de verdad para el levantamiento físico.
-        # Incluir todos los activos de esta ubicación dentro de la empresa, aunque
-        # su área histórica sea Medios, Logística o General. El área del levantamiento
-        # representa quién asume la custodia al aprobar, no un filtro de búsqueda.
+        # La ubicación seleccionada define qué activos se revisan físicamente.
+        # No filtrar por Activo.area: un equipo puede estar en Robótica y tener
+        # un área histórica General/Medios. El área responsable del levantamiento
+        # se conserva en lev.area y se aplica al aprobar, no al descubrir los activos.
         activos = activos_q.order_by(Activo.nombre, Activo.id).all()
         for activo in activos:
             self.db.add(LevantamientoDetalle(

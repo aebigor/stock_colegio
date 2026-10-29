@@ -3,6 +3,7 @@ from io import BytesIO
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from openpyxl import load_workbook
+import pdfplumber
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -14,6 +15,7 @@ from app.modules.personas.service import PersonaService
 from app.modules.ubicaciones.service import UbicacionService
 from .levantamiento_service import LevantamientoService
 from .model import Activo
+from app.modules.categorias.model import Categoria
 
 router = APIRouter(prefix="/activos/inventario-fisico", tags=["Inventario físico"], dependencies=[Depends(get_current_user)])
 public_router = APIRouter(prefix="/inventario-fisico-publico", tags=["Inventario físico público"])
@@ -61,6 +63,139 @@ def _valor_fila(ws, row, col):
     if not col:
         return ""
     return str(ws.cell(row=row, column=col).value or "").strip()
+
+
+def _parsear_cantidad(valor):
+    """Convierte valores como 4, "16 CAJAS", "7 JUEGOS" o "3 UND"."""
+    texto = str(valor or "").strip().replace("\ufeff", "")
+    match = re.search(r"(\d+(?:[.,]\d+)?)", texto)
+    if not match:
+        return 0
+    try:
+        return max(0, int(float(match.group(1).replace(",", "."))))
+    except ValueError:
+        return 0
+
+
+def _categoria_prefijo(nombre, db):
+    base = re.sub(r"[^A-Za-z0-9]", "", nombre.upper())
+    base = (base[:6] or "GEN")
+    prefijo = base[:10]
+    existente = db.query(Categoria).filter(Categoria.prefijo.ilike(prefijo)).first()
+    if not existente:
+        return prefijo
+    for i in range(2, 1000):
+        candidato = (base[:8] + str(i))[:10]
+        if not db.query(Categoria).filter(Categoria.prefijo.ilike(candidato)).first():
+            return candidato
+    raise ValueError(f"No fue posible generar un prefijo para la categoría '{nombre}'.")
+
+
+def _obtener_o_crear_categoria(nombre, db):
+    nombre = re.sub(r"\s+", " ", str(nombre or "").strip()).strip(" .:-")
+    if not nombre:
+        return None
+    categoria = db.query(Categoria).filter(Categoria.nombre.ilike(nombre)).first()
+    if categoria:
+        return categoria
+    categoria = Categoria(
+        nombre=nombre[:120],
+        prefijo=_categoria_prefijo(nombre, db),
+        descripcion="Creada automáticamente durante la importación de inventario físico.",
+    )
+    db.add(categoria)
+    db.flush()
+    return categoria
+
+
+def _reconstruir_categoria_vertical(page, cell):
+    """Lee categorías impresas verticalmente dentro de la columna ITEM."""
+    crop = page.crop(cell)
+    palabras = crop.extract_words(use_text_flow=False, keep_blank_chars=False)
+    if not palabras:
+        return ""
+    # El PDF de inventario usa texto rotado: al extraerlo queda fragmentado
+    # de arriba hacia abajo. Invertir el orden reconstruye MOBILIARIO y
+    # CAJAS EQUIPOS ROBOTICA correctamente.
+    piezas = [p["text"].strip() for p in sorted(palabras, key=lambda x: x["top"]) if p["text"].strip()]
+    texto = "".join(piezas)[::-1]
+    texto = re.sub(r"[^A-Za-z0-9ÁÉÍÓÚÜÑáéíóúüñ ]+", " ", texto)
+    # Los fragmentos de texto rotado pueden venir pegados. Aplicamos los
+    # nombres conocidos del formato y, si no, dejamos el texto reconstruido.
+    compact = _normalizar(texto)
+    conocidos = {
+        "mobiliario": "MOBILIARIO",
+        "cajasequiposrobotica": "CAJAS EQUIPOS ROBOTICA",
+    }
+    if compact in conocidos:
+        return conocidos[compact]
+    # Intento adicional para separar palabras comunes.
+    if "CAJASEQUIPOSROBOTICA" in compact:
+        return "CAJAS EQUIPOS ROBOTICA"
+    if "MOBILIARIO" in compact:
+        return "MOBILIARIO"
+    return texto.strip()
+
+
+def _filas_pdf(contenido):
+    """Extrae filas del formato PDF real usado por Logística."""
+    filas = []
+    with pdfplumber.open(BytesIO(contenido)) as pdf:
+        for page in pdf.pages:
+            tablas = page.find_tables()
+            if not tablas:
+                continue
+            tabla = tablas[0]
+            # Las celdas altas de la primera columna son las categorías
+            # verticales/agrupadoras del formato.
+            rangos_categoria = []
+            for cell in tabla.cells:
+                x0, top, x1, bottom = cell
+                if x0 <= tabla.bbox[0] + 1 and (bottom - top) >= 25 and top > tabla.bbox[1] + 90:
+                    nombre_cat = _reconstruir_categoria_vertical(page, cell)
+                    if nombre_cat and len(_normalizar(nombre_cat)) >= 4:
+                        rangos_categoria.append((top, bottom, nombre_cat))
+
+            words = page.extract_words(use_text_flow=False, keep_blank_chars=False)
+            # Agrupar palabras por línea dentro de la columna ELEMENTO.
+            lineas = {}
+            for w in words:
+                x0, x1, top = w["x0"], w["x1"], w["top"]
+                if x0 < 245 or x0 >= 398 or top < 175:
+                    continue
+                key = round(top / 2) * 2
+                lineas.setdefault(key, []).append(w)
+
+            for top_key, ws in sorted(lineas.items()):
+                ws = sorted(ws, key=lambda w: w["x0"])
+                nombre = " ".join(w["text"] for w in ws).strip()
+                if not nombre or _normalizar(nombre) in {"elemento", "observaciones", "observacion"}:
+                    continue
+
+                # Buscar cantidad y referencia en la misma línea por posición.
+                cantidad_txt = "".join(w["text"] for w in words if 450 <= w["x0"] < 515 and abs(w["top"] - top_key) <= 2)
+                referencia = " ".join(w["text"] for w in words if 398 <= w["x0"] < 453 and abs(w["top"] - top_key) <= 2).strip()
+                observacion = " ".join(w["text"] for w in words if 619 <= w["x0"] < 790 and abs(w["top"] - top_key) <= 2).strip()
+                estados = {
+                    "Bueno": any(w["text"].strip().upper() == "B" for w in words if 515 <= w["x0"] < 550 and abs(w["top"] - top_key) <= 2),
+                    "Regular": any(w["text"].strip().upper() == "R" for w in words if 550 <= w["x0"] < 585 and abs(w["top"] - top_key) <= 2),
+                    "Malo": any(w["text"].strip().upper() == "M" for w in words if 585 <= w["x0"] < 620 and abs(w["top"] - top_key) <= 2),
+                }
+                estado = next((k for k, v in estados.items() if v), "Bueno")
+                cantidad = _parsear_cantidad(cantidad_txt)
+                if cantidad <= 0:
+                    continue
+                y = top_key
+                categoria = next((cat for top, bottom, cat in rangos_categoria if top - 1 <= y <= bottom + 1), "")
+                filas.append({
+                    "nombre": nombre,
+                    "referencia": referencia,
+                    "cantidad": cantidad,
+                    "categoria": categoria,
+                    "estado": estado,
+                    "observacion": observacion,
+                })
+    return filas
 
 
 def _es_logistica(user: Usuario) -> bool:
@@ -205,41 +340,75 @@ async def importar_excel(
     db: Session = Depends(get_db),
     user: Usuario = Depends(get_current_user),
 ):
-    if not archivo.filename.lower().endswith((".xlsx", ".xlsm")):
-        raise HTTPException(status_code=400, detail="Sube un archivo Excel .xlsx o .xlsm.")
+    extension = (archivo.filename or "").lower().rsplit(".", 1)[-1]
+    if extension not in {"xlsx", "xlsm", "pdf"}:
+        raise HTTPException(status_code=400, detail="Sube un archivo Excel (.xlsx/.xlsm) o PDF (.pdf).")
+
     try:
         contenido = await archivo.read()
-        wb = load_workbook(BytesIO(contenido), data_only=True)
-        ws = wb.active
-        header_row, cols = _buscar_encabezados(ws)
-        if not header_row:
-            raise ValueError("No encontré una fila de encabezados. Usa columnas como ELEMENTO, REFERENCIA, CANT., ESTADO y OBSERVACIÓN.")
+        if not contenido:
+            raise ValueError("El archivo está vacío.")
+
+        filas = []
+        if extension in {"xlsx", "xlsm"}:
+            wb = load_workbook(BytesIO(contenido), data_only=True)
+            ws = wb.active
+            header_row, cols = _buscar_encabezados(ws)
+            if not header_row:
+                raise ValueError("No encontré una fila de encabezados. Usa columnas como ELEMENTO, REFERENCIA, CANT., ESTADO y OBSERVACIÓN.")
+            for row in range(header_row + 1, ws.max_row + 1):
+                nombre = _valor_fila(ws, row, cols.get("nombre"))
+                if not nombre:
+                    continue
+                filas.append({
+                    "nombre": nombre,
+                    "referencia": _valor_fila(ws, row, cols.get("referencia")),
+                    "cantidad": _parsear_cantidad(_valor_fila(ws, row, cols.get("cantidad")) or "1"),
+                    "categoria": _valor_fila(ws, row, cols.get("categoria")),
+                    "estado": _valor_fila(ws, row, cols.get("estado")) or "Bueno",
+                    "observacion": _valor_fila(ws, row, cols.get("observacion")),
+                    "marca": _valor_fila(ws, row, cols.get("marca")),
+                    "modelo": _valor_fila(ws, row, cols.get("modelo")),
+                    "serial": _valor_fila(ws, row, cols.get("serial")),
+                })
+        else:
+            filas = _filas_pdf(contenido)
+
+        if not filas:
+            raise ValueError("El archivo no produjo filas válidas. En el PDF se esperan elementos con cantidad; en Excel, una columna ELEMENTO y CANT.")
+
         area = user_area(user)
         service = LevantamientoService(db)
         lev = service.crear_borrador(ubicacion_id, responsable_id, area, user.id)
         creados = 0
-        for row in range(header_row + 1, ws.max_row + 1):
-            nombre = _valor_fila(ws, row, cols.get("nombre"))
-            if not nombre or _normalizar(nombre) in {"primero", "segundo", "tercero", "cuarto", "quinto", "sexto", "septimo", "octavo", "noveno", "decimo", "once"}:
+        categoria_defecto = db.query(Categoria).filter(Categoria.id == categoria_por_defecto).first() if categoria_por_defecto else None
+
+        for fila in filas:
+            nombre = str(fila.get("nombre") or "").strip()
+            if not nombre:
                 continue
-            referencia = _valor_fila(ws, row, cols.get("referencia"))
-            marca = _valor_fila(ws, row, cols.get("marca"))
-            modelo = _valor_fila(ws, row, cols.get("modelo"))
-            serial = _valor_fila(ws, row, cols.get("serial"))
-            obs = _valor_fila(ws, row, cols.get("observacion"))
-            estado = _valor_fila(ws, row, cols.get("estado")) or "Bueno"
-            try:
-                cantidad = int(float(_valor_fila(ws, row, cols.get("cantidad")) or 1))
-            except ValueError:
-                cantidad = 1
-            categoria_id = categoria_por_defecto
-            categoria_texto = _valor_fila(ws, row, cols.get("categoria"))
+            # En el formato actual, los renglones de PRIMERO...ONCE sí son
+            # inventario real (son cajas), por lo que ya no se descartan.
+            referencia = str(fila.get("referencia") or "").strip()
+            obs = str(fila.get("observacion") or "").strip()
+            estado = str(fila.get("estado") or "Bueno").strip() or "Bueno"
+            cantidad = int(fila.get("cantidad") or 0)
+            if cantidad < 1:
+                continue
+
+            categoria_id = None
+            categoria_texto = str(fila.get("categoria") or "").strip()
             if categoria_texto:
-                cat = CategoriaService(db).buscar_nombre(categoria_texto)
-                if cat:
-                    categoria_id = cat.id
-            # Si la referencia coincide con un activo que ya está en esa ubicación,
-            # se vincula al levantamiento en vez de crear un duplicado.
+                categoria = _obtener_o_crear_categoria(categoria_texto, db)
+                categoria_id = categoria.id if categoria else None
+            elif categoria_defecto:
+                categoria_id = categoria_defecto.id
+            else:
+                # Filas que quedan fuera de una celda de categoría vertical
+                # se agrupan en una categoría explícita para no perderlas.
+                categoria = _obtener_o_crear_categoria("GENERAL", db)
+                categoria_id = categoria.id
+
             existente = None
             if referencia:
                 existente = db.query(Activo).filter(
@@ -251,17 +420,24 @@ async def importar_excel(
                 service.agregar_existente(lev.id, existente, min(1, max(0, cantidad)), estado, obs)
                 creados += 1
                 continue
-            if not categoria_id:
-                continue
-            service.agregar_hallazgo(lev.id, nombre, categoria_id, max(1, cantidad), estado, obs, referencia, marca, modelo, serial)
+
+            service.agregar_hallazgo(
+                lev.id, nombre, categoria_id, max(1, cantidad), estado, obs,
+                referencia, str(fila.get("marca") or ""), str(fila.get("modelo") or ""), str(fila.get("serial") or ""),
+            )
             creados += 1
+
         if not creados:
-            raise ValueError("El Excel no produjo filas válidas. Revisa que tenga ELEMENTO y una categoría por defecto o una columna CATEGORÍA.")
+            # crear_borrador hace commit inicial; si no se extrajo ninguna fila válida,
+            # borrar ese borrador vacío para no dejar pruebas huérfanas.
+            db.delete(lev)
+            db.commit()
+            raise ValueError("El archivo no produjo filas válidas. Revisa que existan elementos con cantidad.")
     except Exception as exc:
         db.rollback()
         if isinstance(exc, ValueError):
             raise HTTPException(status_code=400, detail=str(exc))
-        raise HTTPException(status_code=400, detail=f"No se pudo leer el Excel: {exc}")
+        raise HTTPException(status_code=400, detail=f"No se pudo leer el archivo: {exc}")
     return RedirectResponse(url=f"/activos/inventario-fisico/?levantamiento_id={lev.id}", status_code=303)
 
 
