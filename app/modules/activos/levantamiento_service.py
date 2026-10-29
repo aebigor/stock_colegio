@@ -329,7 +329,7 @@ class LevantamientoService:
                         responsable_id=lev.responsable_id,
                         tenedor_id=lev.responsable_id,
                         qr=codigo_barras,
-                        observaciones=d.observacion.strip() or None,
+                        observaciones=(d.observacion or "").strip() or None,
                         area=lev.area,
                         activo=True,
                     )
