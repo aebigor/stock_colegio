@@ -48,6 +48,8 @@ class LevantamientoDetalle(TenantScoped, Base):
     observacion = Column(Text)
     es_nuevo = Column(Boolean, nullable=False, default=False)
     verificado_logistica = Column(Boolean, nullable=False, default=False)
+    # Confirmación independiente para el checklist de devolución posterior a la entrega.
+    revisado_devolucion = Column(Boolean, nullable=False, default=False, server_default="false")
     revisado_por = Column(String(120))
     revisado_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())

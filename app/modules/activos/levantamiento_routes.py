@@ -243,6 +243,7 @@ def _agrupar_detalles_vista(detalles):
             "es_nuevo": primero.es_nuevo,
             "cantidad": len(detalles_grupo),
             "todos_verificados": all(d.verificado_logistica for d in detalles_grupo),
+            "todos_revisados_devolucion": all(getattr(d, "revisado_devolucion", False) for d in detalles_grupo),
             "alguno_verificado": any(d.verificado_logistica for d in detalles_grupo),
             "activo": primero.activo,
         })
@@ -618,6 +619,37 @@ def verificar_grupo(levantamiento_id: int, detalle_ids_csv: str = Form(...), db:
         d.revisado_at = datetime.now(timezone.utc) if marcar else None
     db.commit()
     return RedirectResponse(url=f"/activos/inventario-fisico/{levantamiento_id}/revisar", status_code=303)
+
+
+@router.post("/{levantamiento_id}/grupo/revisar-devolucion")
+def revisar_grupo_devolucion(
+    levantamiento_id: int,
+    detalle_ids_csv: str = Form(...),
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(require_roles("Super Admin", "Superadministrador", "Administrador de Logística", "Admin de Logística")),
+):
+    area = user_area(user)
+    lev = LevantamientoService(db).obtener(levantamiento_id, area)
+    if not lev or lev.estado != "Aprobado":
+        raise HTTPException(status_code=404, detail="No se encontró un levantamiento aprobado en tu área.")
+    try:
+        ids = {int(x) for x in detalle_ids_csv.split(",") if x.strip()}
+    except ValueError:
+        raise HTTPException(status_code=400, detail="La selección de elementos no es válida.")
+    if not ids:
+        raise HTTPException(status_code=400, detail="No se seleccionaron elementos del grupo.")
+    detalles = db.query(LevantamientoDetalle).filter(
+        LevantamientoDetalle.levantamiento_id == lev.id,
+        LevantamientoDetalle.empresa_id == lev.empresa_id,
+        LevantamientoDetalle.id.in_(ids),
+    ).all()
+    if len(detalles) != len(ids):
+        raise HTTPException(status_code=400, detail="Uno o más elementos no pertenecen a este levantamiento.")
+    marcar = not all(d.revisado_devolucion for d in detalles)
+    for d in detalles:
+        d.revisado_devolucion = marcar
+    db.commit()
+    return RedirectResponse(url=f"/activos/inventario-fisico/?levantamiento_id={levantamiento_id}", status_code=303)
 
 
 @router.post("/{levantamiento_id}/eliminar")

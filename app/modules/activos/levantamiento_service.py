@@ -385,6 +385,12 @@ class LevantamientoService:
             raise ValueError("Solo se puede devolver un levantamiento aprobado.")
         if not lev.responsable_id:
             raise ValueError("El levantamiento no tiene responsable.")
+        pendientes_revision = [d for d in lev.detalles if not getattr(d, "revisado_devolucion", False)]
+        if pendientes_revision:
+            raise ValueError(
+                "Debes marcar todos los grupos como revisados antes de registrar la devolución. "
+                f"Quedan {len(pendientes_revision)} elemento(s) por revisar."
+            )
 
         # No dependemos únicamente de detalle.activo_id: un hallazgo nuevo
         # puede representar varias unidades y cada una obtiene su propio

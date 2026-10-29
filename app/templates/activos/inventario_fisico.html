@@ -165,9 +165,34 @@
   <div class="approval-box approved">
     <i class="bi bi-check-circle-fill"></i> Aprobado por <strong>{{ levantamiento.aprobador.nombre if levantamiento.aprobador else '—' }}{% if levantamiento.aprobador and levantamiento.aprobador.apellido %} {{ levantamiento.aprobador.apellido }}{% endif %}</strong>{% if levantamiento.aprobado_at %} el {{ levantamiento.aprobado_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}.
     {% if levantamiento.responsable %}
-      <p class="help mt-2 mb-2">La aprobación ya realizó automáticamente la entrega de los elementos encontrados a <strong>{{ levantamiento.responsable.nombre }}</strong>. No es necesario volver a pasar por Entrega masiva.</p>
+      <p class="help mt-2 mb-3">Antes de devolver, revisa los artículos por grupos. Al marcar cada grupo como revisado, se habilitará la devolución completa.</p>
+      <div class="table-responsive mt-3 mb-3">
+        <table class="physical-table detail-table">
+          <thead><tr><th>Elemento</th><th>Referencia / rango</th><th>Unidades</th><th>Estado físico</th><th>Revisión de devolución</th></tr></thead>
+          <tbody>
+          {% for g in grupos_detalles %}
+            <tr>
+              <td><strong>{{ g.nombre }}</strong>{% if g.categoria %}<br><small>{{ g.categoria.nombre }}</small>{% endif %}</td>
+              <td>{{ g.referencia_rango }}</td>
+              <td>{{ g.cantidad }}</td>
+              <td>{{ g.estado_fisico or '—' }}</td>
+              <td>
+                <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/grupo/revisar-devolucion">
+                  <input type="hidden" name="detalle_ids_csv" value="{{ g.ids }}">
+                  <button class="btn btn-sm {{ 'btn-success' if g.todos_revisados_devolucion else 'btn-outline-primary' }}">
+                    {{ '✓ Revisado' if g.todos_revisados_devolucion else 'Marcar revisado' }}
+                  </button>
+                </form>
+              </td>
+            </tr>
+          {% else %}<tr><td colspan="5" class="empty">No hay artículos para devolver.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% set devolucion_lista = levantamiento.detalles|length > 0 and (levantamiento.detalles|selectattr('revisado_devolucion')|list|length == levantamiento.detalles|length) %}
       <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/devolver-todo" onsubmit="return confirm('¿Confirmas que el docente devuelve todos los activos asignados por esta revisión? Los activos volverán a quedar disponibles en la ubicación y sin responsable.')">
-        <button class="btn btn-warning"><i class="bi bi-box-arrow-in-down"></i> Devolver todo a {{ levantamiento.responsable.nombre }}</button>
+        <button class="btn btn-warning" {% if not devolucion_lista %}disabled title="Marca todos los grupos como revisados para habilitar la devolución"{% endif %}><i class="bi bi-box-arrow-in-down"></i> Devolver todo a {{ levantamiento.responsable.nombre }}</button>
+        {% if not devolucion_lista %}<small class="d-block mt-2">Primero marca todos los grupos como revisados.</small>{% endif %}
       </form>
     {% endif %}
   </div>
