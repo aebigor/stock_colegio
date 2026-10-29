@@ -15,20 +15,17 @@ class ActivoService:
 
     @staticmethod
     def _aplicar_area(query, area: str | None):
-        """Aplica el ámbito del inventario usando también la ubicación.
+        """Filtra por el área administrativa propietaria del activo.
 
-        En datos históricos, activos importados desde Excel o creados antes de
-        separar las áreas pueden tener Activo.area="General" o el área anterior.
-        Para que el inventario físico sea coherente, la ubicación es la fuente
-        de verdad del ámbito operativo: si la ubicación pertenece a Logística,
-        sus activos son visibles para Logística aunque el campo Activo.area esté
-        desactualizado. El filtro multiempresa sigue siendo aplicado por SQLAlchemy.
+        La ubicación representa dónde está físicamente el artículo; no determina
+        si pertenece al inventario de Logística o al de Medios. Durante la
+        aprobación de un levantamiento, Activo.area se establece con el área del
+        levantamiento. Por eso el listado, los contadores y la consulta de detalle
+        deben usar ese mismo campo, sin exigir que Ubicacion.area coincida.
+        El filtro multiempresa de TenantScoped continúa aplicándose normalmente.
         """
         if area and area != "Todas":
-            # La ubicación es la fuente de verdad para evitar que un activo
-            # aparezca simultáneamente en Logística y Medios por tener un área
-            # antigua guardada en Activo.area.
-            query = query.filter(Activo.ubicacion.has(Ubicacion.area == area))
+            query = query.filter(Activo.area == area)
         return query
 
     def listar(
