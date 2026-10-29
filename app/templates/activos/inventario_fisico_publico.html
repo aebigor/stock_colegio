@@ -39,7 +39,7 @@
         <tbody>
         {% for d in levantamiento.detalles %}
           <tr>
-            <td><strong>{{ d.nombre }}</strong>{% if d.categoria %}<br><small>{{ d.categoria.nombre }}</small>{% endif %}{% if d.es_nuevo %}<br><span class="new-badge">Hallazgo nuevo</span>{% endif %}</td>
+            <td><strong>{{ d.nombre }}</strong>{% if d.es_nuevo and d.cantidad_encontrada > 1 and not d.serial and not d.referencia %}<br><small class="existing-badge">{{ d.cantidad_encontrada }} unidades agrupadas</small>{% endif %}{% if d.categoria %}<br><small>{{ d.categoria.nombre }}</small>{% endif %}{% if d.es_nuevo %}<br><span class="new-badge">Hallazgo nuevo</span>{% endif %}</td>
             <td>{{ d.referencia or '—' }}</td>
             <td>{{ d.cantidad_sistema }}</td>
             <td>{% if levantamiento.estado == 'Borrador' %}<input form="detalle-{{ d.id }}" type="number" name="cantidad_encontrada" min="0" value="{{ d.cantidad_encontrada }}" style="width:90px">{% else %}{{ d.cantidad_encontrada }}{% endif %}</td>
