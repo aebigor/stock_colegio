@@ -59,7 +59,12 @@ class LevantamientoService:
             Activo.activo.is_(True),
         )
         if area != "Todas":
-            activos_q = activos_q.filter(Activo.area == area)
+            # Compatibilidad con activos heredados que quedaron como General
+            # aunque la ubicación ya pertenece al inventario de este usuario.
+            activos_q = activos_q.filter(
+                (Activo.area == area)
+                | ((Activo.area == "General") & Activo.ubicacion.has(Ubicacion.area == area))
+            )
         activos = activos_q.order_by(Activo.nombre, Activo.id).all()
         for activo in activos:
             self.db.add(LevantamientoDetalle(

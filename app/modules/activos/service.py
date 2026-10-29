@@ -15,8 +15,21 @@ class ActivoService:
 
     @staticmethod
     def _aplicar_area(query, area: str | None):
+        """Filtra por inventario sin ocultar activos antiguos mal clasificados.
+
+        Algunas cargas/levantamientos anteriores guardaron el área como
+        ``General`` aunque la ubicación ya pertenecía a Logística o Medios.
+        En ese caso se toma como fuente de verdad el área de la ubicación.
+        Esto no mezcla inventarios: solo admite el registro heredado cuando
+        su ubicación pertenece exactamente al área solicitada.
+        """
         if area and area != "Todas":
-            query = query.filter(Activo.area == area)
+            query = query.filter(
+                or_(
+                    Activo.area == area,
+                    (Activo.area == "General") & Activo.ubicacion.has(Ubicacion.area == area),
+                )
+            )
         return query
 
     def listar(
