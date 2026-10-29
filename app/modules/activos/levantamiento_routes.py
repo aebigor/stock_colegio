@@ -15,7 +15,6 @@ from app.modules.personas.service import PersonaService
 from app.modules.ubicaciones.service import UbicacionService
 from .levantamiento_service import LevantamientoService
 from .model import Activo
-from .levantamiento_model import LevantamientoDetalle
 from app.modules.categorias.model import Categoria
 
 router = APIRouter(prefix="/activos/inventario-fisico", tags=["Inventario físico"], dependencies=[Depends(get_current_user)])
@@ -38,8 +37,7 @@ def _normalizar(valor):
 def _buscar_encabezados(ws):
     aliases = {
         "nombre": {"elemento", "nombre", "articulo", "item"},
-        "referencia": {"referencia", "codigo", "codigobarras"},
-        "serial": {"serial", "numerodeserie"},
+        "referencia": {"referencia", "codigo", "codigobarras", "serial"},
         "cantidad": {"cant", "cantidad", "cantidadsistema"},
         "observacion": {"observacion", "observaciones", "detalle"},
         "estado": {"estado", "estadodelactivo"},
@@ -78,46 +76,6 @@ def _parsear_cantidad(valor):
     except ValueError:
         return 0
 
-
-
-def _agrupar_filas_importadas(filas):
-    """Agrupa únicamente filas genéricas compatibles; nunca fusiona identificadores individuales.
-
-    El nombre original se conserva. Seriales o referencias impiden agrupar porque
-    pueden identificar una unidad física o un registro del inventario maestro.
-    Los estados y observaciones también forman parte de la clave para no ocultar
-    diferencias entre unidades.
-    """
-    agrupadas = []
-    indices = {}
-    for fila in filas:
-        fila = dict(fila)
-        nombre = str(fila.get("nombre") or "").strip()
-        referencia = str(fila.get("referencia") or "").strip()
-        serial = str(fila.get("serial") or "").strip()
-        cantidad = max(0, int(fila.get("cantidad") or 0))
-        if not nombre or cantidad < 1:
-            continue
-
-        puede_agrupar = not referencia and not serial
-        clave = (
-            _normalizar(fila.get("nombre")),
-            _normalizar(fila.get("categoria")),
-            _normalizar(fila.get("marca")),
-            _normalizar(fila.get("modelo")),
-            " ".join(str(fila.get("estado") or "").casefold().split()),
-            " ".join(str(fila.get("observacion") or "").casefold().split()),
-        )
-        if puede_agrupar and clave in indices:
-            agrupadas[indices[clave]]["cantidad"] += cantidad
-            continue
-
-        fila["nombre"] = nombre
-        fila["cantidad"] = cantidad
-        agrupadas.append(fila)
-        if puede_agrupar:
-            indices[clave] = len(agrupadas) - 1
-    return agrupadas
 
 def _categoria_prefijo(nombre, db):
     base = re.sub(r"[^A-Za-z0-9]", "", nombre.upper())
@@ -419,31 +377,47 @@ async def importar_excel(
         if not filas:
             raise ValueError("El archivo no produjo filas válidas. En el PDF se esperan elementos con cantidad; en Excel, una columna ELEMENTO y CANT.")
 
-        # Consolidar filas repetidas antes de escribir detalles. Las filas con
-        # referencia/serial permanecen individuales para no perder identidad.
-        filas = _agrupar_filas_importadas(filas)
-
         area = user_area(user)
         service = LevantamientoService(db)
         lev = service.crear_borrador(ubicacion_id, responsable_id, area, user.id)
         creados = 0
-        activos_existentes_agregados = set()
         categoria_defecto = db.query(Categoria).filter(Categoria.id == categoria_por_defecto).first() if categoria_por_defecto else None
 
+        # El borrador ya contiene un detalle por cada activo activo de la ubicación.
+        # Indexamos esos detalles para comparar el Excel contra el inventario real,
+        # no para convertir cada fila del archivo en un hallazgo nuevo.
+        from collections import defaultdict
+        detalles_existentes = [d for d in lev.detalles if d.activo_id and not d.es_nuevo]
+        por_clave = defaultdict(list)
+        por_identificador = {}
+        for detalle in detalles_existentes:
+            activo = detalle.activo
+            clave = (
+                _normalizar(detalle.nombre), detalle.categoria_id or 0,
+                _normalizar(detalle.marca), _normalizar(detalle.modelo),
+            )
+            por_clave[clave].append(detalle)
+            for identificador in (getattr(activo, "codigo", None), getattr(activo, "codigo_barras", None), getattr(activo, "serial", None)):
+                if identificador:
+                    por_identificador[_normalizar(identificador)] = detalle
+        usados = set()
+
+        # Consolidar renglones repetidos del archivo por características compatibles.
+        grupos = {}
         for fila in filas:
             nombre = str(fila.get("nombre") or "").strip()
             if not nombre:
                 continue
-            # En el formato actual, los renglones de PRIMERO...ONCE sí son
-            # inventario real (son cajas), por lo que ya no se descartan.
             referencia = str(fila.get("referencia") or "").strip()
+            serial = str(fila.get("serial") or "").strip()
+            marca = str(fila.get("marca") or "").strip()
+            modelo = str(fila.get("modelo") or "").strip()
             obs = str(fila.get("observacion") or "").strip()
             estado = str(fila.get("estado") or "Bueno").strip() or "Bueno"
             cantidad = int(fila.get("cantidad") or 0)
             if cantidad < 1:
                 continue
 
-            categoria_id = None
             categoria_texto = str(fila.get("categoria") or "").strip()
             if categoria_texto:
                 categoria = _obtener_o_crear_categoria(categoria_texto, db)
@@ -451,90 +425,72 @@ async def importar_excel(
             elif categoria_defecto:
                 categoria_id = categoria_defecto.id
             else:
-                # Filas que quedan fuera de una celda de categoría vertical
-                # se agrupan en una categoría explícita para no perderlas.
-                categoria = _obtener_o_crear_categoria("GENERAL", db)
-                categoria_id = categoria.id
+                # Si el archivo no especifica categoría, primero comparar por nombre,
+                # marca y modelo sin forzar una categoría GENERAL que impediría coincidir.
+                categoria_id = None
 
-            existente = None
-            serial_importado = str(fila.get("serial") or "").strip()
-            if referencia or serial_importado:
-                condiciones = []
-                if referencia:
-                    condiciones.extend([Activo.codigo == referencia, Activo.codigo_barras == referencia, Activo.serial == referencia])
-                if serial_importado:
-                    condiciones.append(Activo.serial == serial_importado)
-                from sqlalchemy import or_
-                existente = db.query(Activo).filter(
-                    Activo.ubicacion_id == ubicacion_id,
-                    Activo.activo.is_(True),
-                    or_(*condiciones),
-                ).first()
-            if existente:
-                if existente.id not in activos_existentes_agregados:
-                    detalle_existente = db.query(LevantamientoDetalle).filter(
-                        LevantamientoDetalle.levantamiento_id == lev.id,
-                        LevantamientoDetalle.activo_id == existente.id,
-                    ).first()
-                    if detalle_existente:
-                        detalle_existente.cantidad_encontrada = 1 if cantidad > 0 else 0
-                        detalle_existente.estado_fisico = estado
-                        detalle_existente.observacion = obs or detalle_existente.observacion
-                    else:
-                        service.agregar_existente(lev.id, existente, min(1, max(0, cantidad)), estado, obs)
-                    activos_existentes_agregados.add(existente.id)
-                    creados += 1
+            # Un serial real o código de activo identifica una unidad; una referencia
+            # descriptiva/modelo común se compara por características del artículo.
+            identificador = serial or referencia
+            detalle_id = por_identificador.get(_normalizar(identificador)) if identificador else None
+            detalle_identificado = next((d for d in detalles_existentes if d.id == detalle_id), None)
+            if detalle_identificado:
+                if detalle_identificado.id not in usados:
+                    detalle_identificado.cantidad_encontrada = 1
+                    detalle_identificado.estado_fisico = estado
+                    if obs:
+                        detalle_identificado.observacion = obs
+                    usados.add(detalle_identificado.id)
                 continue
 
-            marca = str(fila.get("marca") or "").strip()
-            modelo = str(fila.get("modelo") or "").strip()
-            serial = str(fila.get("serial") or "").strip()
-            cantidad_restante = cantidad
+            clave = (_normalizar(nombre), categoria_id or 0, _normalizar(marca), _normalizar(modelo))
+            grupo_key = (clave, _normalizar(serial), _normalizar(referencia), _normalizar(estado), _normalizar(obs))
+            if grupo_key not in grupos:
+                grupos[grupo_key] = {
+                    "nombre": nombre, "categoria_id": categoria_id, "referencia": referencia,
+                    "serial": serial, "marca": marca, "modelo": modelo, "estado": estado,
+                    "observacion": obs, "cantidad": 0, "clave": clave,
+                }
+            grupos[grupo_key]["cantidad"] += cantidad
 
-            # Para artículos genéricos sin serial/código, aprovechar primero
-            # los activos que ya aparecen en el borrador para esa ubicación.
-            # Cada coincidencia actualiza un detalle individual; el sobrante
-            # queda como hallazgo nuevo y se aprobará por unidad.
-            if not referencia and not serial:
-                existentes_genericos = db.query(LevantamientoDetalle).filter(
-                    LevantamientoDetalle.levantamiento_id == lev.id,
-                    LevantamientoDetalle.activo_id.isnot(None),
-                    LevantamientoDetalle.categoria_id == categoria_id,
-                ).all()
-                compatibles = []
-                for detalle_existente in existentes_genericos:
-                    activo = detalle_existente.activo
-                    if not activo or activo.id in activos_existentes_agregados:
-                        continue
-                    if _normalizar(detalle_existente.nombre) != _normalizar(nombre):
-                        continue
-                    if _normalizar(detalle_existente.marca) != _normalizar(marca):
-                        continue
-                    if _normalizar(detalle_existente.modelo) != _normalizar(modelo):
-                        continue
-                    compatibles.append(detalle_existente)
-
-                # La cantidad importada representa lo encontrado: dejar a cero
-                # los demás registros compatibles conserva la diferencia como
-                # faltante, sin borrar ni dar de baja activos automáticamente.
-                for detalle_existente in compatibles:
-                    detalle_existente.cantidad_encontrada = 0
-                    detalle_existente.estado_fisico = estado
-                    detalle_existente.observacion = obs or detalle_existente.observacion
-                for detalle_existente in compatibles[:cantidad_restante]:
-                    detalle_existente.cantidad_encontrada = 1
-                    activos_existentes_agregados.add(detalle_existente.activo_id)
-                    cantidad_restante -= 1
-
-            if cantidad_restante > 0:
+        for grupo in grupos.values():
+            cantidad_archivo = grupo["cantidad"]
+            if grupo["clave"][1] == 0:
+                candidatos = [d for d in detalles_existentes
+                              if d.id not in usados
+                              and _normalizar(d.nombre) == grupo["clave"][0]
+                              and _normalizar(d.marca) == grupo["clave"][2]
+                              and _normalizar(d.modelo) == grupo["clave"][3]]
+            else:
+                candidatos = [d for d in por_clave.get(grupo["clave"], []) if d.id not in usados]
+            # Las unidades existentes se cuentan primero. Solo el excedente del Excel
+            # se registra como hallazgo nuevo; nunca se duplica la cantidad ya registrada.
+            existentes_a_contar = min(cantidad_archivo, len(candidatos))
+            for detalle in candidatos[:existentes_a_contar]:
+                detalle.cantidad_encontrada = 1
+                detalle.estado_fisico = grupo["estado"]
+                if grupo["observacion"]:
+                    detalle.observacion = grupo["observacion"]
+                usados.add(detalle.id)
+            diferencia = max(0, cantidad_archivo - existentes_a_contar)
+            if diferencia:
+                categoria_nueva_id = grupo["categoria_id"]
+                if not categoria_nueva_id:
+                    categoria_general = _obtener_o_crear_categoria("GENERAL", db)
+                    categoria_nueva_id = categoria_general.id if categoria_general else None
                 service.agregar_hallazgo(
-                    lev.id, nombre, categoria_id, cantidad_restante, estado, obs,
-                    referencia, marca, modelo, serial,
+                    lev.id, grupo["nombre"], categoria_nueva_id, diferencia,
+                    grupo["estado"], grupo["observacion"], grupo["referencia"],
+                    grupo["marca"], grupo["modelo"], grupo["serial"],
                 )
                 creados += 1
-            elif cantidad > 0:
-                creados += 1
 
+        # Los activos de la ubicación que no aparecieron en el archivo quedan con
+        # cantidad encontrada 0 para que Logística pueda revisar el faltante.
+        for detalle in detalles_existentes:
+            if detalle.id not in usados:
+                detalle.cantidad_encontrada = 0
+        db.commit()
         if not creados:
             # crear_borrador hace commit inicial; si no se extrajo ninguna fila válida,
             # borrar ese borrador vacío para no dejar pruebas huérfanas.
