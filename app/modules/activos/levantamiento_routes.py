@@ -1,4 +1,5 @@
 import re
+from datetime import datetime, timezone
 from io import BytesIO
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -15,6 +16,7 @@ from app.modules.personas.service import PersonaService
 from app.modules.ubicaciones.service import UbicacionService
 from .levantamiento_service import LevantamientoService
 from .model import Activo
+from .levantamiento_model import LevantamientoDetalle
 from app.modules.categorias.model import Categoria
 
 router = APIRouter(prefix="/activos/inventario-fisico", tags=["Inventario físico"], dependencies=[Depends(get_current_user)])
@@ -198,6 +200,55 @@ def _filas_pdf(contenido):
     return filas
 
 
+def _agrupar_detalles_vista(detalles):
+    """Agrupa solo para presentar; conserva cada detalle/activo en la base de datos."""
+    grupos = {}
+    individuales = []
+    for d in detalles:
+        # Serial real significa identidad individual: nunca se agrupa.
+        if d.serial:
+            key = ("individual", d.id)
+        else:
+            key = (
+                _normalizar(d.nombre), d.categoria_id or 0,
+                _normalizar(d.marca), _normalizar(d.modelo),
+                bool(d.es_nuevo), (d.estado_fisico or "").strip().casefold(),
+                (d.observacion or "").strip().casefold(),
+            )
+        grupos.setdefault(key, []).append(d)
+
+    resultado = []
+    for detalles_grupo in grupos.values():
+        primero = detalles_grupo[0]
+        referencias = sorted(
+            {str(d.referencia).strip() for d in detalles_grupo if d.referencia},
+            key=lambda x: (re.sub(r"\d+", lambda m: m.group().zfill(12), x), x.casefold()),
+        )
+        if len(referencias) > 1:
+            rango = f"Desde {referencias[0]} hasta {referencias[-1]}"
+        elif referencias:
+            rango = referencias[0]
+        else:
+            rango = "—"
+        resultado.append({
+            "detalles": detalles_grupo,
+            "ids": ",".join(str(d.id) for d in detalles_grupo),
+            "nombre": primero.nombre,
+            "categoria": primero.categoria,
+            "cantidad_sistema": sum(int(d.cantidad_sistema or 0) for d in detalles_grupo),
+            "cantidad_encontrada": sum(int(d.cantidad_encontrada or 0) for d in detalles_grupo),
+            "referencia_rango": rango,
+            "estado_fisico": primero.estado_fisico,
+            "observacion": primero.observacion,
+            "es_nuevo": primero.es_nuevo,
+            "cantidad": len(detalles_grupo),
+            "todos_verificados": all(d.verificado_logistica for d in detalles_grupo),
+            "alguno_verificado": any(d.verificado_logistica for d in detalles_grupo),
+            "activo": primero.activo,
+        })
+    return sorted(resultado, key=lambda g: (str(g["nombre"] or "").casefold(), g["referencia_rango"]))
+
+
 def _es_logistica(user: Usuario) -> bool:
     return bool(user.rol and user.rol.nombre in (LOGISTICA_ROLES | SUPER_ADMIN_ROLES))
 
@@ -279,6 +330,7 @@ def index(request: Request, levantamiento_id: int | None = None, db: Session = D
             "title": "Inventario físico",
             "levantamientos": levantamientos,
             "levantamiento": levantamiento,
+            "grupos_detalles": _agrupar_detalles_vista(levantamiento.detalles) if levantamiento else [],
             "ubicaciones": ubicaciones,
             "personas": personas,
             "categorias": categorias,
@@ -491,12 +543,15 @@ async def importar_excel(
             if detalle.id not in usados:
                 detalle.cantidad_encontrada = 0
         db.commit()
-        if not creados:
-            # crear_borrador hace commit inicial; si no se extrajo ninguna fila válida,
-            # borrar ese borrador vacío para no dejar pruebas huérfanas.
+        # Una importación puede coincidir completamente con activos existentes y, por
+        # tanto, no generar hallazgos nuevos. Eso NO significa que el archivo sea inválido:
+        # el borrador sirve para verificar existentes y registrar faltantes.
+        if not usados and not creados:
+            # Solo eliminar el borrador recién creado si realmente no se pudo asociar
+            # ninguna fila válida a activos existentes ni crear hallazgos.
             db.delete(lev)
             db.commit()
-            raise ValueError("El archivo no produjo filas válidas. Revisa que existan elementos con cantidad.")
+            raise ValueError("No se pudo asociar ninguna fila del archivo con activos existentes ni crear hallazgos. Revisa nombres, referencias y cantidades.")
     except Exception as exc:
         db.rollback()
         if isinstance(exc, ValueError):
@@ -513,7 +568,7 @@ def revisar(levantamiento_id: int, request: Request, db: Session = Depends(get_d
         raise HTTPException(status_code=404, detail="Levantamiento no encontrado en tu área.")
     return templates.TemplateResponse(request=request, name="activos/inventario_fisico.html", context={
         "title": "Revisar inventario físico", "levantamientos": LevantamientoService(db).listar("Todas"),
-        "levantamiento": lev, "ubicaciones": UbicacionService(db).listar("Todas"),
+        "levantamiento": lev, "grupos_detalles": _agrupar_detalles_vista(lev.detalles), "ubicaciones": UbicacionService(db).listar("Todas"),
         "personas": PersonaService(db).listar(), "categorias": CategoriaService(db).listar(estado="Activas"),
         "area": area_consulta, "usuario_actual": _nombre_usuario(user), "es_logistica": True, "modo_revision": True,
         "es_super_admin": bool(user.rol and user.rol.nombre in SUPER_ADMIN_ROLES), "current_user_id": user.id,
@@ -535,6 +590,33 @@ def desverificar_detalle(detalle_id: int, levantamiento_id: int = Form(...), db:
         LevantamientoService(db).desverificar_detalle(detalle_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    return RedirectResponse(url=f"/activos/inventario-fisico/{levantamiento_id}/revisar", status_code=303)
+
+
+@router.post("/{levantamiento_id}/grupo/verificar")
+def verificar_grupo(levantamiento_id: int, detalle_ids_csv: str = Form(...), db: Session = Depends(get_db), user: Usuario = Depends(require_roles("Super Admin", "Superadministrador", "Administrador de Logística", "Admin de Logística"))):
+    lev = LevantamientoService(db).obtener(levantamiento_id, user_area(user))
+    if not lev or lev.estado != "Pendiente de aprobación":
+        raise HTTPException(status_code=404, detail="Levantamiento pendiente no encontrado en tu área.")
+    try:
+        ids = {int(x) for x in detalle_ids_csv.split(",") if x.strip()}
+    except ValueError:
+        raise HTTPException(status_code=400, detail="La selección de elementos no es válida.")
+    if not ids:
+        raise HTTPException(status_code=400, detail="No se seleccionaron elementos.")
+    detalles = db.query(LevantamientoDetalle).filter(
+        LevantamientoDetalle.levantamiento_id == lev.id,
+        LevantamientoDetalle.empresa_id == lev.empresa_id,
+        LevantamientoDetalle.id.in_(ids),
+    ).all()
+    if len(detalles) != len(ids):
+        raise HTTPException(status_code=400, detail="Uno o más elementos no pertenecen a este levantamiento.")
+    marcar = not all(d.verificado_logistica for d in detalles)
+    for d in detalles:
+        d.verificado_logistica = marcar
+        d.revisado_por = _nombre_usuario(user) if marcar else None
+        d.revisado_at = datetime.now(timezone.utc) if marcar else None
+    db.commit()
     return RedirectResponse(url=f"/activos/inventario-fisico/{levantamiento_id}/revisar", status_code=303)
 
 

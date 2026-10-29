@@ -95,18 +95,38 @@
     <table class="physical-table detail-table">
       <thead><tr><th>Elemento</th><th>Referencia</th><th>Sistema</th><th>Encontrado</th><th>Estado físico</th><th>Observación</th><th>Origen</th><th></th></tr></thead>
       <tbody>
-      {% for d in levantamiento.detalles %}
-      <tr>
-        <td><strong>{{ d.nombre }}</strong>{% if d.es_nuevo and d.cantidad_encontrada > 1 and not d.serial and not d.referencia %}<br><small class="existing-badge">{{ d.cantidad_encontrada }} unidades agrupadas</small>{% endif %}{% if d.categoria %}<br><small>{{ d.categoria.nombre }}</small>{% endif %}</td>
-        <td>{{ d.referencia or '—' }}</td>
-        <td>{{ d.cantidad_sistema }}</td>
-        <td>{% if levantamiento.estado == 'Borrador' and not modo_revision|default(false) %}<form method="post" action="/activos/inventario-fisico/detalle/{{ d.id }}" class="inline-edit"><input type="hidden" name="levantamiento_id" value="{{ levantamiento.id }}"><input type="number" name="cantidad_encontrada" min="0" value="{{ d.cantidad_encontrada }}"><select name="estado_fisico"><option {% if d.estado_fisico == 'Bueno' %}selected{% endif %}>Bueno</option><option {% if d.estado_fisico == 'Regular' %}selected{% endif %}>Regular</option><option {% if d.estado_fisico == 'Malo' %}selected{% endif %}>Malo</option><option {% if d.estado_fisico == 'No encontrado' %}selected{% endif %}>No encontrado</option><option {% if d.estado_fisico == 'Mantenimiento' %}selected{% endif %}>Mantenimiento</option></select><button class="btn btn-sm btn-outline-primary">Guardar</button></form>{% else %}{{ d.cantidad_encontrada }}{% endif %}</td>
-        <td>{{ d.estado_fisico }}</td>
-        <td>{{ d.observacion or '—' }}</td>
-        <td>{% if d.es_nuevo %}<span class="new-badge">Hallazgo nuevo</span>{% else %}<span class="existing-badge">Activo registrado</span>{% endif %}</td>
-        <td>{% if modo_revision|default(false) and levantamiento.estado == 'Pendiente de aprobación' %}<form method="post" action="/activos/inventario-fisico/detalle/{{ d.id }}/{{ 'desverificar' if d.verificado_logistica else 'verificar' }}"><input type="hidden" name="levantamiento_id" value="{{ levantamiento.id }}"><button class="btn btn-sm {{ 'btn-success' if d.verificado_logistica else 'btn-outline-primary' }}">{{ '✓ Verificado' if d.verificado_logistica else 'Revisar' }}</button></form>{% elif d.activo %}<a href="/activos/{{ d.activo.id }}/detalle" class="btn btn-sm btn-outline-secondary">Ver</a>{% endif %}</td>
-      </tr>
-      {% else %}<tr><td colspan="8" class="empty">No hay elementos en esta revisión.</td></tr>{% endfor %}
+      {% if modo_revision|default(false) and levantamiento.estado == 'Pendiente de aprobación' %}
+        {% for g in grupos_detalles %}
+        <tr>
+          <td><strong>{{ g.nombre }}</strong><br><small class="existing-badge">{{ g.cantidad }} unidad(es) agrupadas</small>{% if g.categoria %}<br><small>{{ g.categoria.nombre }}</small>{% endif %}</td>
+          <td>{{ g.referencia_rango }}</td>
+          <td>{{ g.cantidad_sistema }}</td>
+          <td>{{ g.cantidad_encontrada }}</td>
+          <td>{{ g.estado_fisico or '—' }}</td>
+          <td>{{ g.observacion or '—' }}</td>
+          <td>{% if g.es_nuevo %}<span class="new-badge">Hallazgo nuevo</span>{% else %}<span class="existing-badge">Activos registrados</span>{% endif %}</td>
+          <td>
+            <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/grupo/verificar">
+              <input type="hidden" name="detalle_ids_csv" value="{{ g.ids }}">
+              <button class="btn btn-sm {{ 'btn-success' if g.todos_verificados else 'btn-outline-primary' }}">{{ '✓ Grupo verificado' if g.todos_verificados else 'Revisar grupo' }}</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}<tr><td colspan="8" class="empty">No hay elementos en esta revisión.</td></tr>{% endfor %}
+      {% else %}
+        {% for d in levantamiento.detalles %}
+        <tr>
+          <td><strong>{{ d.nombre }}</strong>{% if d.es_nuevo and d.cantidad_encontrada > 1 and not d.serial and not d.referencia %}<br><small class="existing-badge">{{ d.cantidad_encontrada }} unidades agrupadas</small>{% endif %}{% if d.categoria %}<br><small>{{ d.categoria.nombre }}</small>{% endif %}</td>
+          <td>{{ d.referencia or '—' }}</td>
+          <td>{{ d.cantidad_sistema }}</td>
+          <td>{% if levantamiento.estado == 'Borrador' and not modo_revision|default(false) %}<form method="post" action="/activos/inventario-fisico/detalle/{{ d.id }}" class="inline-edit"><input type="hidden" name="levantamiento_id" value="{{ levantamiento.id }}"><input type="number" name="cantidad_encontrada" min="0" value="{{ d.cantidad_encontrada }}"><select name="estado_fisico"><option {% if d.estado_fisico == 'Bueno' %}selected{% endif %}>Bueno</option><option {% if d.estado_fisico == 'Regular' %}selected{% endif %}>Regular</option><option {% if d.estado_fisico == 'Malo' %}selected{% endif %}>Malo</option><option {% if d.estado_fisico == 'No encontrado' %}selected{% endif %}>No encontrado</option><option {% if d.estado_fisico == 'Mantenimiento' %}selected{% endif %}>Mantenimiento</option></select><button class="btn btn-sm btn-outline-primary">Guardar</button></form>{% else %}{{ d.cantidad_encontrada }}{% endif %}</td>
+          <td>{{ d.estado_fisico }}</td>
+          <td>{{ d.observacion or '—' }}</td>
+          <td>{% if d.es_nuevo %}<span class="new-badge">Hallazgo nuevo</span>{% else %}<span class="existing-badge">Activo registrado</span>{% endif %}</td>
+          <td>{% if modo_revision|default(false) and levantamiento.estado == 'Pendiente de aprobación' %}<form method="post" action="/activos/inventario-fisico/detalle/{{ d.id }}/{{ 'desverificar' if d.verificado_logistica else 'verificar' }}"><input type="hidden" name="levantamiento_id" value="{{ levantamiento.id }}"><button class="btn btn-sm {{ 'btn-success' if d.verificado_logistica else 'btn-outline-primary' }}">{{ '✓ Verificado' if d.verificado_logistica else 'Revisar' }}</button></form>{% elif d.activo %}<a href="/activos/{{ d.activo.id }}/detalle" class="btn btn-sm btn-outline-secondary">Ver</a>{% endif %}</td>
+        </tr>
+        {% else %}<tr><td colspan="8" class="empty">No hay elementos en esta revisión.</td></tr>{% endfor %}
+      {% endif %}
       </tbody>
     </table>
   </div>

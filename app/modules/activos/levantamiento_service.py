@@ -38,6 +38,19 @@ class LevantamientoService:
         return q.first()
 
     def crear_borrador(self, ubicacion_id, responsable_id, area, usuario_id):
+        # Evitar una segunda entrega activa al mismo docente en la misma ubicación.
+        # Cuando el levantamiento anterior figure como Devuelto, se permite crear otro.
+        if responsable_id:
+            entrega_activa = self.db.query(LevantamientoInventario).filter(
+                LevantamientoInventario.ubicacion_id == ubicacion_id,
+                LevantamientoInventario.responsable_id == responsable_id,
+                LevantamientoInventario.estado.in_(["Borrador", "Pendiente de aprobación", "Aprobado"]),
+            ).first()
+            if entrega_activa:
+                raise ValueError(
+                    f"Este docente ya tiene un levantamiento activo (#{entrega_activa.id}, estado: {entrega_activa.estado}). "
+                    "Abre ese proceso y termínalo o registra la devolución si ya recibió los activos antes de crear otro levantamiento para esta ubicación."
+                )
         # El área del inventario depende del usuario que crea el levantamiento
         # (Logística/Medios), no del campo descriptivo de la ubicación (p. ej. General).
         ubicacion = self.db.query(Ubicacion).filter(Ubicacion.id == ubicacion_id).first()
