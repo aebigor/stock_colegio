@@ -91,6 +91,7 @@
   <div class="notice locked"><i class="bi bi-lock-fill"></i> Este levantamiento está bloqueado para edición. Solo Logística/Super Admin puede aprobarlo.</div>
   {% endif %}
 
+  {% if levantamiento.estado != 'Aprobado' %}
   <div class="table-responsive mt-3">
     <table class="physical-table detail-table">
       <thead><tr><th>Elemento</th><th>Referencia</th><th>Sistema</th><th>Encontrado</th><th>Estado físico</th><th>Observación</th><th>Origen</th><th></th></tr></thead>
@@ -130,6 +131,7 @@
       </tbody>
     </table>
   </div>
+  {% endif %}
 
   {% if levantamiento.estado == 'Borrador' %}
   <div class="add-found mt-4">
