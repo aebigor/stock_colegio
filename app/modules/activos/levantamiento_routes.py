@@ -140,63 +140,112 @@ def _reconstruir_categoria_vertical(page, cell):
 
 
 def _filas_pdf(contenido):
-    """Extrae filas del formato PDF real usado por Logística."""
+    """Extrae filas de inventarios PDF usando las columnas detectadas de la tabla.
+
+    No depende de coordenadas fijas: los formatos del colegio pueden variar
+    en tamaño, márgenes u orientación y seguir teniendo la misma estructura.
+    """
     filas = []
     with pdfplumber.open(BytesIO(contenido)) as pdf:
         for page in pdf.pages:
             tablas = page.find_tables()
             if not tablas:
                 continue
-            tabla = tablas[0]
-            # Las celdas altas de la primera columna son las categorías
-            # verticales/agrupadoras del formato.
-            rangos_categoria = []
-            for cell in tabla.cells:
-                x0, top, x1, bottom = cell
-                if x0 <= tabla.bbox[0] + 1 and (bottom - top) >= 25 and top > tabla.bbox[1] + 90:
-                    nombre_cat = _reconstruir_categoria_vertical(page, cell)
-                    if nombre_cat and len(_normalizar(nombre_cat)) >= 4:
-                        rangos_categoria.append((top, bottom, nombre_cat))
 
-            words = page.extract_words(use_text_flow=False, keep_blank_chars=False)
-            # Agrupar palabras por línea dentro de la columna ELEMENTO.
-            lineas = {}
-            for w in words:
-                x0, x1, top = w["x0"], w["x1"], w["top"]
-                if x0 < 245 or x0 >= 398 or top < 175:
-                    continue
-                key = round(top / 2) * 2
-                lineas.setdefault(key, []).append(w)
+            for tabla in tablas:
+                matriz = tabla.extract() or []
+                encabezado_idx = None
+                columnas = {}
+                for idx, row in enumerate(matriz[:12]):
+                    encontrados = {}
+                    for col_idx, valor in enumerate(row):
+                        clave = _normalizar(valor)
+                        if clave in {"elemento", "nombre", "articulo", "item"}:
+                            encontrados["nombre"] = col_idx
+                        elif clave in {"cant", "cantidad", "cantidadsistema"}:
+                            encontrados["cantidad"] = col_idx
+                        elif clave in {"referencia", "codigo", "codigobarras"}:
+                            encontrados["referencia"] = col_idx
+                        elif clave in {"marca"}:
+                            encontrados["marca"] = col_idx
+                        elif clave in {"observacion", "observaciones"}:
+                            encontrados["observacion"] = col_idx
+                    if "nombre" in encontrados and "cantidad" in encontrados:
+                        encabezado_idx, columnas = idx, encontrados
+                        break
 
-            for top_key, ws in sorted(lineas.items()):
-                ws = sorted(ws, key=lambda w: w["x0"])
-                nombre = " ".join(w["text"] for w in ws).strip()
-                if not nombre or _normalizar(nombre) in {"elemento", "observaciones", "observacion"}:
+                if encabezado_idx is None:
                     continue
 
-                # Buscar cantidad y referencia en la misma línea por posición.
-                cantidad_txt = "".join(w["text"] for w in words if 450 <= w["x0"] < 515 and abs(w["top"] - top_key) <= 2)
-                referencia = " ".join(w["text"] for w in words if 398 <= w["x0"] < 453 and abs(w["top"] - top_key) <= 2).strip()
-                observacion = " ".join(w["text"] for w in words if 619 <= w["x0"] < 790 and abs(w["top"] - top_key) <= 2).strip()
-                estados = {
-                    "Bueno": any(w["text"].strip().upper() == "B" for w in words if 515 <= w["x0"] < 550 and abs(w["top"] - top_key) <= 2),
-                    "Regular": any(w["text"].strip().upper() == "R" for w in words if 550 <= w["x0"] < 585 and abs(w["top"] - top_key) <= 2),
-                    "Malo": any(w["text"].strip().upper() == "M" for w in words if 585 <= w["x0"] < 620 and abs(w["top"] - top_key) <= 2),
-                }
-                estado = next((k for k, v in estados.items() if v), "Bueno")
-                cantidad = _parsear_cantidad(cantidad_txt)
-                if cantidad <= 0:
-                    continue
-                y = top_key
-                categoria = next((cat for top, bottom, cat in rangos_categoria if top - 1 <= y <= bottom + 1), "")
-                filas.append({
-                    "nombre": nombre,
-                    "referencia": referencia,
-                    "cantidad": cantidad,
-                    "categoria": categoria,
-                    "estado": estado,
-                    "observacion": observacion,
-                })
+                # Categorías impresas verticalmente en la primera columna.
+                rangos_categoria = []
+                for cell in tabla.cells:
+                    if not cell:
+                        continue
+                    x0, top, x1, bottom = cell
+                    if x0 <= tabla.bbox[0] + 1 and (bottom - top) >= 25 and top > tabla.bbox[1] + 90:
+                        nombre_cat = _reconstruir_categoria_vertical(page, cell)
+                        if nombre_cat and len(_normalizar(nombre_cat)) >= 4:
+                            rangos_categoria.append((top, bottom, nombre_cat))
+
+                for row_idx in range(encabezado_idx + 1, len(matriz)):
+                    row = matriz[row_idx]
+                    if not row:
+                        continue
+                    nombre_idx = columnas["nombre"]
+                    cantidad_idx = columnas["cantidad"]
+                    nombre = str(row[nombre_idx] or "").strip() if nombre_idx < len(row) else ""
+                    if not nombre:
+                        continue
+                    if _normalizar(nombre) in {"elemento", "observaciones", "observacion", "b", "r", "m"}:
+                        continue
+
+                    cantidad_txt = row[cantidad_idx] if cantidad_idx < len(row) else ""
+                    cantidad = _parsear_cantidad(cantidad_txt)
+                    if cantidad <= 0:
+                        continue
+
+                    def valor_columna(campo):
+                        col = columnas.get(campo)
+                        return str(row[col] or "").strip() if col is not None and col < len(row) else ""
+
+                    # Estado: X aparece en una de las columnas B/R/M, después de CANT.
+                    estado = "Bueno"
+                    try:
+                        celdas = tabla.rows[row_idx].cells
+                        if len(celdas) >= 8:
+                            for estado_idx, estado_nombre in ((5, "Bueno"), (6, "Regular"), (7, "Malo")):
+                                celda = celdas[estado_idx]
+                                if celda:
+                                    x0, top, x1, bottom = celda
+                                    marcas = [w for w in page.extract_words(use_text_flow=False, keep_blank_chars=False)
+                                              if x0 <= w["x0"] < x1 and top <= w["top"] < bottom
+                                              and w["text"].strip().upper() == "X"]
+                                    if marcas:
+                                        estado = estado_nombre
+                                        break
+                    except (IndexError, TypeError):
+                        pass
+
+                    categoria = ""
+                    try:
+                        celda_elemento = tabla.rows[row_idx].cells[nombre_idx]
+                        if celda_elemento:
+                            y = (celda_elemento[1] + celda_elemento[3]) / 2
+                            categoria = next((cat for top, bottom, cat in rangos_categoria
+                                              if top - 1 <= y <= bottom + 1), "")
+                    except (IndexError, TypeError):
+                        pass
+
+                    filas.append({
+                        "nombre": re.sub(r"\s+", " ", nombre).strip(),
+                        "referencia": valor_columna("referencia"),
+                        "cantidad": cantidad,
+                        "categoria": categoria,
+                        "estado": estado,
+                        "observacion": valor_columna("observacion"),
+                        "marca": valor_columna("marca"),
+                    })
     return filas
 
 
