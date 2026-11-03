@@ -54,7 +54,7 @@
       {% for item in levantamientos %}
       <tr>
         <td>{{ item.created_at.strftime('%d/%m/%Y %H:%M') if item.created_at else '—' }}</td>
-        <td><strong>{{ item.ubicacion.nombre if item.ubicacion else '—' }}</strong><br><small>{{ item.area }}</small></td>
+        <td><strong>{{ item.ubicacion.nombre if item.ubicacion else '—' }}</strong>{% if item.ubicacion and item.ubicacion.curso %}<br><small>Curso: {{ item.ubicacion.curso }}</small>{% endif %}<br><small>{{ item.area }}</small></td>
         <td>{{ item.responsable.nombre if item.responsable else '—' }}</td>
         <td><span class="status status-{{ item.estado|lower|replace(' ','-')|replace('ó','o') }}">{{ item.estado }}</span></td>
         {% if es_super_admin %}<td>{{ item.creador.nombre if item.creador else '—' }}{% if item.creador and item.creador.apellido %} {{ item.creador.apellido }}{% endif %}</td>{% endif %}
