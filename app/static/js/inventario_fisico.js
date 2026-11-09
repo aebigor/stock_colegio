@@ -51,8 +51,8 @@
 
     try {
       await copiarTexto(enlace);
-      if (etiqueta) etiqueta.textContent = "¡Copiado!";
-      if (estado) estado.textContent = "Enlace copiado. Ya puedes pegarlo en WhatsApp o correo.";
+      if (etiqueta) etiqueta.textContent = "Enlace copiado";
+      if (estado) estado.textContent = "Enlace copiado";
       boton.classList.remove("btn-outline-primary");
       boton.classList.add("btn-success");
     } catch (_error) {
@@ -80,6 +80,7 @@
     if (!boton || boton.disabled) return;
 
     const textoAnterior = boton.textContent.trim();
+    const estadoEsperado = boton.dataset.verified !== "true";
     const claseVerificada = "btn-success";
     const clasePendiente = "btn-outline-primary";
     boton.disabled = true;
@@ -101,17 +102,45 @@
       });
 
       const tipo = respuesta.headers.get("content-type") || "";
-      if (!respuesta.ok || !tipo.includes("application/json")) {
-        let detalle = "No se pudo guardar la revisión. Actualiza la página e inténtalo de nuevo.";
-        if (tipo.includes("application/json")) {
-          const error = await respuesta.json();
-          detalle = error.detail || detalle;
+      let resultado;
+
+      if (respuesta.ok && tipo.toLowerCase().includes("application/json")) {
+        resultado = await respuesta.json();
+      } else {
+        // Compatibilidad con servidores que aún respondan con la redirección
+        // tradicional después de haber guardado correctamente la revisión.
+        // No se confunde con una sesión vencida: el destino debe ser la pantalla
+        // de revisión del mismo levantamiento.
+        let destinoFinal = "";
+        try {
+          destinoFinal = new URL(respuesta.url, window.location.href).pathname;
+        } catch (_error) {
+          destinoFinal = "";
         }
-        throw new Error(detalle);
+        const redireccionTrasGuardar = respuesta.ok && respuesta.redirected &&
+          /\/activos\/inventario-fisico\/\d+\/revisar\/?$/.test(destinoFinal);
+
+        if (redireccionTrasGuardar) {
+          resultado = {
+            ok: true,
+            verified: estadoEsperado,
+            message: "Grupo guardado correctamente."
+          };
+        } else {
+          let detalle = "No se pudo guardar la revisión. Verifica tu sesión e inténtalo de nuevo.";
+          if (tipo.toLowerCase().includes("application/json")) {
+            try {
+              const error = await respuesta.json();
+              detalle = error.detail || detalle;
+            } catch (_error) { /* conserva el mensaje genérico */ }
+          }
+          throw new Error(detalle);
+        }
       }
 
-      const resultado = await respuesta.json();
-      if (!resultado.ok) throw new Error(resultado.message || "No se pudo guardar la revisión.");
+      if (!resultado || !resultado.ok) {
+        throw new Error((resultado && resultado.message) || "No se pudo guardar la revisión.");
+      }
 
       const verificado = Boolean(resultado.verified);
       boton.dataset.verified = verificado ? "true" : "false";

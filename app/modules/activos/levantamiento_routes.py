@@ -667,7 +667,13 @@ def verificar_grupo(levantamiento_id: int, request: Request, detalle_ids_csv: st
         d.revisado_por = _nombre_usuario(user) if marcar else None
         d.revisado_at = datetime.now(timezone.utc) if marcar else None
     db.commit()
-    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+
+    # Los navegadores pueden omitir X-Requested-With en algunos escenarios.
+    # El encabezado Accept: application/json también identifica la petición AJAX.
+    requested_with = (request.headers.get("x-requested-with") or "").strip().lower()
+    accept = (request.headers.get("accept") or "").lower()
+    wants_json = requested_with == "xmlhttprequest" or "application/json" in accept
+    if wants_json:
         return JSONResponse({
             "ok": True,
             "verified": marcar,
