@@ -2,7 +2,7 @@ import re
 from datetime import datetime, timezone
 from io import BytesIO
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from openpyxl import load_workbook
 import pdfplumber
 from sqlalchemy.orm import Session
@@ -644,7 +644,7 @@ def desverificar_detalle(detalle_id: int, levantamiento_id: int = Form(...), db:
 
 
 @router.post("/{levantamiento_id}/grupo/verificar")
-def verificar_grupo(levantamiento_id: int, detalle_ids_csv: str = Form(...), db: Session = Depends(get_db), user: Usuario = Depends(require_roles("Super Admin", "Superadministrador", "Administrador de Logística", "Admin de Logística"))):
+def verificar_grupo(levantamiento_id: int, request: Request, detalle_ids_csv: str = Form(...), db: Session = Depends(get_db), user: Usuario = Depends(require_roles("Super Admin", "Superadministrador", "Administrador de Logística", "Admin de Logística"))):
     lev = LevantamientoService(db).obtener(levantamiento_id, user_area(user))
     if not lev or lev.estado != "Pendiente de aprobación":
         raise HTTPException(status_code=404, detail="Levantamiento pendiente no encontrado en tu área.")
@@ -667,6 +667,13 @@ def verificar_grupo(levantamiento_id: int, detalle_ids_csv: str = Form(...), db:
         d.revisado_por = _nombre_usuario(user) if marcar else None
         d.revisado_at = datetime.now(timezone.utc) if marcar else None
     db.commit()
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return JSONResponse({
+            "ok": True,
+            "verified": marcar,
+            "count": len(detalles),
+            "message": "Grupo marcado como verificado." if marcar else "Verificación del grupo retirada.",
+        })
     return RedirectResponse(url=f"/activos/inventario-fisico/{levantamiento_id}/revisar", status_code=303)
 
 

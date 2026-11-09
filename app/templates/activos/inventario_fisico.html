@@ -86,7 +86,7 @@
 
   {% if levantamiento.estado == 'Borrador' %}
   <div class="notice"><i class="bi bi-unlock"></i> Este levantamiento está abierto. El docente puede corregir cantidades y observaciones. Al enviarlo quedará bloqueado.</div>
-  <div class="public-link-note mt-2"><strong>Enlace para el docente:</strong> <code>{{ request.base_url }}inventario-fisico-publico/{{ levantamiento.public_token }}</code> <button type="button" class="btn btn-sm btn-outline-primary" onclick="navigator.clipboard.writeText('{{ request.base_url }}inventario-fisico-publico/{{ levantamiento.public_token }}')">Copiar enlace</button></div>
+
   {% else %}
   <div class="notice locked"><i class="bi bi-lock-fill"></i> Este levantamiento está bloqueado para edición. Solo Logística/Super Admin puede aprobarlo.</div>
   {% endif %}
@@ -107,9 +107,10 @@
           <td>{{ g.observacion or '—' }}</td>
           <td>{% if g.es_nuevo %}<span class="new-badge">Hallazgo nuevo</span>{% else %}<span class="existing-badge">Activos registrados</span>{% endif %}</td>
           <td>
-            <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/grupo/verificar">
+            <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/grupo/verificar" data-ajax-review-form>
               <input type="hidden" name="detalle_ids_csv" value="{{ g.ids }}">
-              <button class="btn btn-sm {{ 'btn-success' if g.todos_verificados else 'btn-outline-primary' }}">{{ '✓ Grupo verificado' if g.todos_verificados else 'Revisar grupo' }}</button>
+              <button type="submit" data-review-button data-verified="{{ 'true' if g.todos_verificados else 'false' }}" class="btn btn-sm {{ 'btn-success' if g.todos_verificados else 'btn-outline-primary' }}">{{ '✓ Grupo verificado' if g.todos_verificados else 'Revisar grupo' }}</button>
+              <span class="review-feedback visually-hidden" aria-live="polite"></span>
             </form>
           </td>
         </tr>
@@ -153,8 +154,12 @@
     <div class="public-link-note">
       <strong><i class="bi bi-send"></i> Próximo paso: enviar al docente</strong>
       <p class="help mb-2">Este usuario no debe enviar el levantamiento directamente. Comparte el enlace con el docente; él revisará cantidades, estado, observaciones y firmará. Al pulsar <strong>Enviar a Logística</strong> desde ese enlace, el levantamiento quedará bloqueado para que Logística lo revise y apruebe.</p>
-      <code>{{ request.base_url }}inventario-fisico-publico/{{ levantamiento.public_token }}</code>
-      <button type="button" class="btn btn-sm btn-outline-primary ms-2" onclick="navigator.clipboard.writeText('{{ request.base_url }}inventario-fisico-publico/{{ levantamiento.public_token }}')"><i class="bi bi-copy"></i> Copiar enlace</button>
+      {% set enlace_docente = request.base_url|string ~ 'inventario-fisico-publico/' ~ levantamiento.public_token %}
+      <code class="public-url" data-public-url>{{ enlace_docente }}</code>
+      <button type="button" class="btn btn-sm btn-outline-primary ms-2" data-copy-url="{{ enlace_docente }}">
+        <i class="bi bi-copy"></i> <span data-copy-label>Copiar enlace</span>
+      </button>
+      <span class="copy-feedback ms-2" data-copy-status role="status" aria-live="polite"></span>
     </div>
   </div>
   {% endif %}
@@ -207,4 +212,8 @@
   {% endif %}
 </section>
 {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/inventario_fisico.js?v=3" defer></script>
 {% endblock %}
