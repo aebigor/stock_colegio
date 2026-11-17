@@ -50,6 +50,11 @@ class LevantamientoDetalle(TenantScoped, Base):
     verificado_logistica = Column(Boolean, nullable=False, default=False)
     # Confirmación independiente para el checklist de devolución posterior a la entrega.
     revisado_devolucion = Column(Boolean, nullable=False, default=False, server_default="false")
+    # Datos independientes de la devolución: no sobrescriben el conteo original del docente.
+    cantidad_devuelta = Column(Integer, nullable=True)
+    observacion_devolucion = Column(Text, nullable=True)
+    devolucion_revisada_por = Column(String(120), nullable=True)
+    devolucion_revisada_at = Column(DateTime(timezone=True), nullable=True)
     revisado_por = Column(String(120))
     revisado_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())

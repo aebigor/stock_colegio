@@ -6,9 +6,14 @@
   <title>{{ title }}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/inventario_fisico.css">
+  <link rel="stylesheet" href="/static/css/inventario_fisico.css?v=20261117-2">
   <style>
     body{background:#070d18;color:#eef5ff;min-height:100vh}.public-wrap{max-width:1200px;margin:0 auto;padding:28px 18px}.public-card{background:#111b2c;border:1px solid #24344d;border-radius:14px;padding:20px;margin-bottom:18px}.public-card h1,.public-card h2,.public-card h3{color:#fff}.public-brand{display:flex;justify-content:space-between;gap:16px;align-items:center}.public-link-note{background:#0d3341;border:1px solid #2a6073;color:#d8f8ff;border-radius:10px;padding:12px}.public-table input,.public-table select,.public-table textarea{background:#0b1422;color:#fff;border:1px solid #31435e;border-radius:7px;padding:7px}.public-table textarea{min-width:220px}.locked{background:#3b2d0c;border-color:#71571d;color:#ffe9a6}.status{color:#fff}.new-badge{color:#07131f;background:#fbbf24;padding:4px 7px;border-radius:999px;font-size:.72rem}
+    @media(max-width:600px){
+      .public-wrap{padding:12px 9px}.public-card{padding:13px;margin-bottom:12px}.public-brand{align-items:flex-start;flex-direction:column;gap:8px}.public-brand h1{font-size:1.4rem}.public-brand p{font-size:.85rem}
+      .public-table{min-width:0!important;width:100%;border-collapse:separate;border-spacing:0}.public-table thead{display:none}.public-table,.public-table tbody{display:block;width:100%}.public-table tbody{display:grid;gap:11px}.public-table tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 11px;padding:7px 10px;border:1px solid #2b3d57;border-radius:11px;background:#0d1727}.public-table tbody td{display:flex;flex-direction:column;gap:5px;min-width:0;padding:9px 0;border:0;border-bottom:1px solid rgba(148,163,184,.14);overflow-wrap:anywhere;font-size:.82rem}.public-table tbody td::before{content:attr(data-label);color:#9fb0c8;font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.035em}.public-table tbody td:first-child,.public-table tbody td:nth-child(2),.public-table tbody td:nth-child(5),.public-table tbody td:nth-child(6),.public-table tbody td:last-child{grid-column:1/-1}.public-table input,.public-table select,.public-table textarea{width:100%!important;min-width:0!important;min-height:42px;font-size:16px}.public-table textarea{min-height:70px}.public-table .btn{width:100%;min-height:40px}.public-card form.row{--bs-gutter-x:.65rem;--bs-gutter-y:.75rem}.public-card input,.public-card select,.public-card textarea{font-size:16px;min-height:42px}.public-card #firma-docente{height:170px!important}.public-card #enviar-revision .btn{width:100%;margin:5px 0!important}
+    }
+    @media(max-width:380px){.public-table tbody tr{grid-template-columns:minmax(0,1fr)}.public-table tbody td,.public-table tbody td:first-child,.public-table tbody td:nth-child(2),.public-table tbody td:nth-child(5),.public-table tbody td:nth-child(6),.public-table tbody td:last-child{grid-column:1}}
   </style>
 </head>
 <body>
@@ -39,13 +44,13 @@
         <tbody>
         {% for d in levantamiento.detalles %}
           <tr>
-            <td><strong>{{ d.nombre }}</strong>{% if d.es_nuevo and d.cantidad_encontrada > 1 and not d.serial and not d.referencia %}<br><small class="existing-badge">{{ d.cantidad_encontrada }} unidades agrupadas</small>{% endif %}{% if d.categoria %}<br><small>{{ d.categoria.nombre }}</small>{% endif %}{% if d.es_nuevo %}<br><span class="new-badge">Hallazgo nuevo</span>{% endif %}</td>
-            <td>{{ d.referencia or '—' }}</td>
-            <td>{{ d.cantidad_sistema }}</td>
-            <td>{% if levantamiento.estado == 'Borrador' %}<input form="detalle-{{ d.id }}" type="number" name="cantidad_encontrada" min="0" value="{{ d.cantidad_encontrada }}" style="width:90px">{% else %}{{ d.cantidad_encontrada }}{% endif %}</td>
-            <td>{% if levantamiento.estado == 'Borrador' %}<select form="detalle-{{ d.id }}" name="estado_fisico">{% for estado in ['Bueno','Regular','Malo','No encontrado','Mantenimiento'] %}<option {% if d.estado_fisico == estado %}selected{% endif %}>{{ estado }}</option>{% endfor %}</select>{% else %}{{ d.estado_fisico }}{% endif %}</td>
-            <td>{% if levantamiento.estado == 'Borrador' %}<textarea form="detalle-{{ d.id }}" name="observacion" rows="2" placeholder="Escribe la novedad o condición">{{ d.observacion or '' }}</textarea><form id="detalle-{{ d.id }}" method="post" action="/inventario-fisico-publico/{{ token }}/detalle/{{ d.id }}"><button class="btn btn-sm btn-outline-primary mt-1"><i class="bi bi-save"></i> Guardar</button></form>{% else %}{{ d.observacion or '—' }}{% endif %}</td>
-            <td>{% if d.verificado_logistica %}<span class="status status-aprobado">Verificado</span>{% else %}Pendiente{% endif %}</td>
+            <td data-label="Elemento"><strong>{{ d.nombre }}</strong>{% if d.es_nuevo and d.cantidad_encontrada > 1 and not d.serial and not d.referencia %}<br><small class="existing-badge">{{ d.cantidad_encontrada }} unidades agrupadas</small>{% endif %}{% if d.categoria %}<br><small>{{ d.categoria.nombre }}</small>{% endif %}{% if d.es_nuevo %}<br><span class="new-badge">Hallazgo nuevo</span>{% endif %}</td>
+            <td data-label="Referencia">{{ d.referencia or '—' }}</td>
+            <td data-label="Sistema">{{ d.cantidad_sistema }}</td>
+            <td data-label="Encontrado">{% if levantamiento.estado == 'Borrador' %}<input form="detalle-{{ d.id }}" type="number" name="cantidad_encontrada" min="0" inputmode="numeric" value="{{ d.cantidad_encontrada }}" aria-label="Cantidad encontrada de {{ d.nombre }}">{% else %}{{ d.cantidad_encontrada }}{% endif %}</td>
+            <td data-label="Estado físico">{% if levantamiento.estado == 'Borrador' %}<select form="detalle-{{ d.id }}" name="estado_fisico" aria-label="Estado físico de {{ d.nombre }}">{% for estado in ['Bueno','Regular','Malo','No encontrado','Mantenimiento'] %}<option {% if d.estado_fisico == estado %}selected{% endif %}>{{ estado }}</option>{% endfor %}</select>{% else %}{{ d.estado_fisico }}{% endif %}</td>
+            <td data-label="Observación">{% if levantamiento.estado == 'Borrador' %}<textarea form="detalle-{{ d.id }}" name="observacion" rows="2" placeholder="Escribe la novedad o condición">{{ d.observacion or '' }}</textarea><form id="detalle-{{ d.id }}" method="post" action="/inventario-fisico-publico/{{ token }}/detalle/{{ d.id }}"><button class="btn btn-sm btn-outline-primary mt-1"><i class="bi bi-save"></i> Guardar</button></form>{% else %}{{ d.observacion or '—' }}{% endif %}</td>
+            <td data-label="Logística">{% if d.verificado_logistica %}<span class="status status-aprobado">Verificado</span>{% else %}Pendiente{% endif %}</td>
           </tr>
         {% else %}<tr><td colspan="7" class="empty">No hay elementos registrados.</td></tr>{% endfor %}
         </tbody>

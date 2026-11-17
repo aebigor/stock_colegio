@@ -166,4 +166,172 @@
     }
   });
 
+  function recalcularResumenDevolucion() {
+    const filas = Array.from(document.querySelectorAll(".return-group-row"));
+    let entregadas = 0;
+    let recibidas = 0;
+    filas.forEach((fila) => {
+      const entregada = Math.max(0, Number.parseInt(fila.dataset.delivered || "0", 10) || 0);
+      const campo = fila.querySelector(".return-quantity");
+      const recibida = campo
+        ? Math.max(0, Math.min(entregada, Number.parseInt(campo.value || "0", 10) || 0))
+        : Math.max(0, Number.parseInt(fila.querySelector("[data-returned-value]")?.dataset.returnedValue || "0", 10) || 0);
+      const faltante = Math.max(0, entregada - recibida);
+      entregadas += entregada;
+      recibidas += recibida;
+      const indicador = fila.querySelector(".return-missing-count");
+      if (indicador) {
+        indicador.textContent = String(faltante);
+        indicador.classList.toggle("zero", faltante === 0);
+      }
+      const observacion = fila.querySelector(".return-observation");
+      if (observacion) {
+        observacion.required = faltante > 0;
+        observacion.classList.toggle("is-invalid", faltante > 0 && !observacion.value.trim());
+      }
+    });
+
+    const summary = document.getElementById("return-summary");
+    if (summary) {
+      const faltantes = Math.max(0, entregadas - recibidas);
+      const totalEntregadas = document.getElementById("return-total-delivered");
+      const totalRecibidas = document.getElementById("return-total-returned");
+      const totalFaltantes = document.getElementById("return-total-missing");
+      if (totalEntregadas) totalEntregadas.textContent = String(entregadas);
+      if (totalRecibidas) totalRecibidas.textContent = String(recibidas);
+      if (totalFaltantes) totalFaltantes.textContent = String(faltantes);
+    }
+
+    const formularios = Array.from(document.querySelectorAll("form[data-ajax-return-form]"));
+    const todosGuardados = formularios.length > 0 && formularios.every((formulario) => formulario.dataset.saved === "true");
+    const registrar = document.getElementById("register-return-button");
+    const ayuda = document.getElementById("return-review-hint");
+    if (registrar) registrar.disabled = !todosGuardados;
+    if (ayuda) {
+      if (!todosGuardados) {
+        ayuda.textContent = "Guarda la cantidad y observación de todos los grupos primero.";
+      } else {
+        const faltantes = Math.max(0, entregadas - recibidas);
+        ayuda.textContent = faltantes
+          ? `Se registrarán ${recibidas} recibidas y ${faltantes} faltantes; estos últimos seguirán prestados.`
+          : "Todos los grupos están guardados y listos para registrar la devolución.";
+      }
+    }
+  }
+
+  document.addEventListener("input", (evento) => {
+    const campo = evento.target;
+    if (!campo.matches(".return-quantity, .return-observation")) return;
+    const fila = campo.closest(".return-group-row");
+    const formulario = fila?.querySelector("form[data-ajax-return-form]");
+    if (formulario) {
+      formulario.dataset.saved = "false";
+      const boton = formulario.querySelector("[data-return-save-button]");
+      const feedback = formulario.querySelector(".return-feedback");
+      if (boton) {
+        boton.disabled = false;
+        boton.textContent = "Guardar cambios";
+        boton.classList.remove("btn-success");
+        boton.classList.add("btn-outline-primary");
+      }
+      if (feedback) {
+        feedback.textContent = "Cambios sin guardar";
+        feedback.classList.remove("is-error");
+      }
+    }
+    recalcularResumenDevolucion();
+  });
+
+  document.addEventListener("submit", async (evento) => {
+    const formulario = evento.target.closest("form[data-ajax-return-form]");
+    if (!formulario) return;
+    evento.preventDefault();
+
+    const fila = formulario.closest(".return-group-row");
+    const boton = formulario.querySelector("[data-return-save-button]");
+    const feedback = formulario.querySelector(".return-feedback");
+    if (!fila || !boton || boton.disabled) return;
+
+    const inputCantidad = fila.querySelector(".return-quantity");
+    const campoObservacion = fila.querySelector(".return-observation");
+    const entregada = Math.max(0, Number.parseInt(fila.dataset.delivered || "0", 10) || 0);
+    const recibida = Math.max(0, Number.parseInt(inputCantidad?.value || "0", 10) || 0);
+    if (recibida > entregada) {
+      if (feedback) {
+        feedback.textContent = `La cantidad no puede superar ${entregada}.`;
+        feedback.classList.add("is-error");
+      }
+      return;
+    }
+    if (recibida < entregada && !campoObservacion?.value.trim()) {
+      if (campoObservacion) {
+        campoObservacion.required = true;
+        campoObservacion.classList.add("is-invalid");
+        campoObservacion.focus();
+      }
+      if (feedback) {
+        feedback.textContent = "Escribe por qué faltan unidades.";
+        feedback.classList.add("is-error");
+      }
+      return;
+    }
+
+    const textoAnterior = boton.textContent;
+    boton.disabled = true;
+    boton.textContent = "Guardando…";
+    if (feedback) {
+      feedback.textContent = "";
+      feedback.classList.remove("is-error");
+    }
+
+    try {
+      const respuesta = await fetch(formulario.action, {
+        method: "POST",
+        body: new FormData(formulario),
+        credentials: "same-origin",
+        headers: {
+          "X-Requested-With": "XMLHttpRequest",
+          "Accept": "application/json"
+        }
+      });
+      const tipo = (respuesta.headers.get("content-type") || "").toLowerCase();
+      if (!respuesta.ok || !tipo.includes("application/json")) {
+        let mensaje = "No se pudo guardar la devolución. Comprueba tu sesión e inténtalo de nuevo.";
+        if (tipo.includes("application/json")) {
+          try {
+            const error = await respuesta.json();
+            mensaje = error.detail || mensaje;
+          } catch (_) { /* conserva el mensaje genérico */ }
+        }
+        throw new Error(mensaje);
+      }
+      const resultado = await respuesta.json();
+      if (!resultado.ok) throw new Error(resultado.message || "No se pudo guardar la devolución.");
+
+      formulario.dataset.saved = "true";
+      boton.textContent = "✓ Guardado";
+      boton.classList.remove("btn-outline-primary");
+      boton.classList.add("btn-success");
+      if (feedback) {
+        feedback.textContent = `Guardado · ${resultado.returned}/${resultado.delivered} recibidas · ${resultado.missing} faltantes`;
+        feedback.classList.remove("is-error");
+      }
+      if (campoObservacion) campoObservacion.classList.remove("is-invalid");
+      recalcularResumenDevolucion();
+    } catch (error) {
+      formulario.dataset.saved = "false";
+      boton.textContent = textoAnterior;
+      if (feedback) {
+        feedback.textContent = error.message;
+        feedback.classList.add("is-error");
+      } else {
+        window.alert(error.message);
+      }
+      recalcularResumenDevolucion();
+    } finally {
+      boton.disabled = false;
+    }
+  });
+
+  recalcularResumenDevolucion();
 })();

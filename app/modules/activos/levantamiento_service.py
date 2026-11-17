@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 from secrets import token_urlsafe
+import re
+import unicodedata
 from sqlalchemy.orm import Session, joinedload
 from .levantamiento_model import LevantamientoInventario, LevantamientoDetalle
 from .model import Activo
@@ -7,6 +9,45 @@ from .movimiento_model import Movimiento
 from app.modules.categorias.model import Categoria
 from app.modules.personas.model import Persona
 from app.modules.ubicaciones.model import Ubicacion
+
+
+def cantidad_entregada_detalle(detalle):
+    """Cantidad que salió al responsable según el detalle aprobado.
+
+    Un detalle de activo existente representa como máximo una unidad; un hallazgo
+    nuevo puede representar varias unidades registradas en cantidad_encontrada.
+    """
+    cantidad = max(0, int(detalle.cantidad_encontrada or 0))
+    if detalle.es_nuevo:
+        return cantidad
+    return 1 if detalle.activo_id and cantidad > 0 else 0
+
+
+def cantidad_devuelta_detalle(detalle):
+    entregada = cantidad_entregada_detalle(detalle)
+    if detalle.cantidad_devuelta is None:
+        return entregada
+    return max(0, min(entregada, int(detalle.cantidad_devuelta or 0)))
+
+
+def _normalizar_grupo_detalle(detalle):
+    def normalizar(valor):
+        texto = unicodedata.normalize("NFD", str(valor or "").strip().casefold())
+        texto = "".join(caracter for caracter in texto if unicodedata.category(caracter) != "Mn")
+        return re.sub(r"[^a-z0-9]+", "", texto)
+
+    if detalle.serial:
+        return ("individual", detalle.id)
+    return (
+        "grupo",
+        normalizar(detalle.nombre),
+        detalle.categoria_id or 0,
+        normalizar(detalle.marca),
+        normalizar(detalle.modelo),
+        bool(detalle.es_nuevo),
+        (detalle.estado_fisico or "").strip().casefold(),
+        (detalle.observacion or "").strip().casefold(),
+    )
 
 
 class LevantamientoService:
@@ -44,7 +85,7 @@ class LevantamientoService:
             entrega_activa = self.db.query(LevantamientoInventario).filter(
                 LevantamientoInventario.ubicacion_id == ubicacion_id,
                 LevantamientoInventario.responsable_id == responsable_id,
-                LevantamientoInventario.estado.in_(["Borrador", "Pendiente de aprobación", "Aprobado"]),
+                LevantamientoInventario.estado.in_(["Borrador", "Pendiente de aprobación", "Aprobado", "Devuelto parcialmente"]),
             ).first()
             if entrega_activa:
                 raise ValueError(
@@ -307,6 +348,7 @@ class LevantamientoService:
                     estado_entrega="Entregado mediante inventario físico",
                     observaciones=(
                         f"Entrega automática por aprobación del levantamiento físico #{lev.id}. "
+                        f"detalle_fisico_id={d.id}. "
                         f"Responsable: {responsable.nombre}. "
                         f"Verificado por Logística: {usuario_nombre}."
                         + (f" Observación del docente: {d.observacion}" if d.observacion else "")
@@ -358,7 +400,8 @@ class LevantamientoService:
                         estado="Prestado",
                         estado_entrega="Activo nuevo entregado mediante inventario físico",
                         observaciones=(
-                            f"Hallazgo nuevo incorporado y entregado automáticamente al aprobar el levantamiento #{lev.id}. "
+                            f"Hallazgo nuevo incorporado y entregado automáticamente al aprobar el levantamiento físico #{lev.id}. "
+                            f"detalle_fisico_id={d.id}. "
                             f"Responsable: {responsable.nombre}. "
                             f"Aprobado por: {usuario_nombre}."
                             + (f" Observación del docente: {d.observacion}" if d.observacion else "")
@@ -381,21 +424,18 @@ class LevantamientoService:
         lev = self.db.query(LevantamientoInventario).options(
             joinedload(LevantamientoInventario.detalles)
         ).filter(LevantamientoInventario.id == levantamiento_id).first()
-        if not lev or lev.estado != "Aprobado":
-            raise ValueError("Solo se puede devolver un levantamiento aprobado.")
+        if not lev or lev.estado not in {"Aprobado", "Devuelto parcialmente"}:
+            raise ValueError("Solo se puede registrar la devolución de un levantamiento aprobado o con devolución parcial.")
         if not lev.responsable_id:
             raise ValueError("El levantamiento no tiene responsable.")
+
         pendientes_revision = [d for d in lev.detalles if not getattr(d, "revisado_devolucion", False)]
         if pendientes_revision:
             raise ValueError(
-                "Debes marcar todos los grupos como revisados antes de registrar la devolución. "
-                f"Quedan {len(pendientes_revision)} elemento(s) por revisar."
+                "Debes guardar la cantidad y observación de todos los grupos antes de registrar la devolución. "
+                f"Quedan {len(pendientes_revision)} grupo(s) por revisar."
             )
 
-        # No dependemos únicamente de detalle.activo_id: un hallazgo nuevo
-        # puede representar varias unidades y cada una obtiene su propio
-        # registro de Activo. Las recuperamos por el movimiento de entrega
-        # generado al aprobar este levantamiento.
         from sqlalchemy import or_
         movimientos_entrega = (
             self.db.query(Movimiento)
@@ -408,41 +448,187 @@ class LevantamientoService:
                     Movimiento.observaciones.ilike(f"%levantamiento #{lev.id}%"),
                 ),
             )
+            .order_by(Movimiento.activo_id.asc(), Movimiento.id.asc())
             .all()
         )
-        activo_ids = {m.activo_id for m in movimientos_entrega}
-        if not activo_ids:
+        if not movimientos_entrega:
             raise ValueError("No se encontraron movimientos de entrega vinculados a este levantamiento.")
 
-        devueltos = 0
-        for activo_id in activo_ids:
-            activo = self.db.query(Activo).filter(Activo.id == activo_id).first()
-            if not activo or not activo.activo:
-                continue
-            if activo.responsable_id != lev.responsable_id or activo.estado != "Prestado":
-                continue
-            activo.estado = "Disponible"
-            activo.responsable_id = None
-            activo.tenedor_id = None
-            activo.ubicacion_id = lev.ubicacion_id
-            self.db.add(Movimiento(
-                empresa_id=lev.empresa_id,
-                activo_id=activo.id,
-                persona_id=lev.responsable_id,
-                ubicacion_id=lev.ubicacion_id,
-                ubicacion_origen_id=lev.ubicacion_id,
-                tipo="Devolucion",
-                estado="Disponible",
-                estado_entrega="Devuelto a bodega",
-                observaciones=f"Devolución completa del levantamiento físico #{lev.id}. Responsable liberado. Registrado por {usuario}.",
-                usuario=usuario,
-                area=activo.area,
-            ))
-            devueltos += 1
+        resumen_grupos = {}
+        for detalle in lev.detalles:
+            clave = _normalizar_grupo_detalle(detalle)
+            resumen = resumen_grupos.setdefault(clave, {"entregadas": 0, "recibidas": 0, "observacion": None})
+            resumen["entregadas"] += cantidad_entregada_detalle(detalle)
+            resumen["recibidas"] += cantidad_devuelta_detalle(detalle)
+            if detalle.observacion_devolucion:
+                resumen["observacion"] = detalle.observacion_devolucion
+        for resumen in resumen_grupos.values():
+            resumen["faltantes"] = max(0, resumen["entregadas"] - resumen["recibidas"])
 
-        # También sincroniza levantamientos antiguos cuyos activos ya fueron
-        # devueltos por el flujo de Entrega/Devolución masiva.
-        lev.estado = "Devuelto"
+        # Mapear activos entregados y planear primero todas las devoluciones.
+        # No se modifica ningún activo hasta validar que las cantidades guardadas
+        # se pueden asociar con registros concretos.
+        from .model import Activo
+        activos_ids_entregados = {m.activo_id for m in movimientos_entrega if m.activo_id}
+        activos_por_id = {
+            a.id: a for a in self.db.query(Activo).filter(
+                Activo.empresa_id == lev.empresa_id,
+                Activo.id.in_(activos_ids_entregados or {-1}),
+            ).all()
+        }
+        movimientos_por_activo = {}
+        for movimiento in movimientos_entrega:
+            movimientos_por_activo.setdefault(movimiento.activo_id, []).append(movimiento)
+
+        usados = set()
+        plan = []
+        for detalle in sorted(lev.detalles, key=lambda d: (str(d.referencia or "").casefold(), d.id)):
+            entregada = cantidad_entregada_detalle(detalle)
+            solicitada = cantidad_devuelta_detalle(detalle)
+            if solicitada > entregada:
+                raise ValueError(f"La cantidad devuelta para '{detalle.nombre}' no puede superar las {entregada} unidades entregadas.")
+            if entregada <= 0:
+                continue
+
+            candidatos = []
+            if detalle.activo_id:
+                if detalle.activo_id in activos_por_id:
+                    candidatos = [detalle.activo_id]
+            elif detalle.es_nuevo:
+                marcador = f"detalle_fisico_id={detalle.id}"
+                candidatos = sorted({
+                    m.activo_id for m in movimientos_entrega
+                    if m.activo_id and marcador in (m.observaciones or "")
+                })
+
+                # Compatibilidad con levantamientos aprobados antes de incorporar
+                # el marcador detalle_fisico_id en sus movimientos.
+                if not candidatos:
+                    candidatos = sorted(
+                        activo_id for activo_id, activo in activos_por_id.items()
+                        if activo_id not in usados
+                        and (activo.nombre or "").strip().casefold() == (detalle.nombre or "").strip().casefold()
+                        and (detalle.categoria_id is None or activo.categoria_id == detalle.categoria_id)
+                        and (not detalle.marca or (activo.marca or "").strip().casefold() == detalle.marca.strip().casefold())
+                        and (not detalle.modelo or (activo.modelo or "").strip().casefold() == detalle.modelo.strip().casefold())
+                        and (not detalle.serial or (activo.serial or "").strip().casefold() == detalle.serial.strip().casefold())
+                        and activo_id in movimientos_por_activo
+                    )
+            candidatos = [asset_id for asset_id in candidatos if asset_id not in usados]
+            if len(candidatos) < entregada:
+                raise ValueError(
+                    f"No fue posible asociar las {entregada} unidades entregadas de '{detalle.nombre}' "
+                    "con los activos del inventario. No se registró ninguna devolución; revisa el levantamiento."
+                )
+
+            seleccionados = candidatos[:solicitada]
+            faltantes_ids = candidatos[solicitada:entregada]
+            usados.update(candidatos)
+            plan.append((detalle, seleccionados, faltantes_ids, entregada, solicitada))
+
+        devueltos = 0
+        faltantes_por_activo = {}
+        for detalle, seleccionados, faltantes_ids, entregada, solicitada in plan:
+            resumen_grupo = resumen_grupos.get(_normalizar_grupo_detalle(detalle), {})
+            entregadas_grupo = int(resumen_grupo.get("entregadas", entregada))
+            recibidas_grupo = int(resumen_grupo.get("recibidas", solicitada))
+            faltantes_grupo = int(resumen_grupo.get("faltantes", max(0, entregadas_grupo - recibidas_grupo)))
+            observacion_grupo = (resumen_grupo.get("observacion") or detalle.observacion_devolucion or "").strip()
+            detalle_id_tag = f"detalle_fisico_id={detalle.id}"
+
+            for activo_id in seleccionados:
+                activo = activos_por_id.get(activo_id)
+                if not activo or not activo.activo:
+                    continue
+                # Ya devuelto en un intento anterior: no crear movimiento duplicado.
+                if activo.responsable_id != lev.responsable_id or activo.estado != "Prestado":
+                    continue
+                activo.estado = "Disponible"
+                activo.responsable_id = None
+                activo.tenedor_id = None
+                activo.ubicacion_id = lev.ubicacion_id
+                nota = (
+                    f"Devolución del levantamiento físico #{lev.id}; {detalle_id_tag}. "
+                    f"Resumen del grupo: {recibidas_grupo} recibidas de {entregadas_grupo}; "
+                    f"faltantes reportados: {faltantes_grupo}. "
+                    + (f"Observación de devolución: {observacion_grupo}. " if observacion_grupo else "")
+                    + f"Registrado por {usuario}."
+                )
+                self.db.add(Movimiento(
+                    empresa_id=lev.empresa_id,
+                    activo_id=activo.id,
+                    persona_id=lev.responsable_id,
+                    ubicacion_id=lev.ubicacion_id,
+                    ubicacion_origen_id=lev.ubicacion_id,
+                    tipo="Devolucion",
+                    estado="Disponible",
+                    estado_entrega="Devuelto a bodega",
+                    observaciones=nota,
+                    usuario=usuario,
+                    area=activo.area,
+                ))
+                devueltos += 1
+
+            # Registrar también la novedad en el historial de los activos que
+            # siguen prestados. No se altera su estado ni su responsable.
+            for activo_id in faltantes_ids:
+                activo = activos_por_id.get(activo_id)
+                if not activo or not activo.activo:
+                    continue
+                if activo.responsable_id != lev.responsable_id or activo.estado != "Prestado":
+                    continue
+                nota = (
+                    f"Novedad de devolución del levantamiento físico #{lev.id}; {detalle_id_tag}. "
+                    f"Resumen del grupo: {recibidas_grupo} recibidas de {entregadas_grupo}; "
+                    f"faltantes reportados: {faltantes_grupo}. "
+                    + (f"Observación de devolución: {observacion_grupo}. " if observacion_grupo else "")
+                    + f"El activo continúa prestado a {lev.responsable.nombre if lev.responsable else 'su responsable'}. "
+                    + f"Registrado por {usuario}."
+                )
+                faltantes_por_activo[activo_id] = nota
+
+        if faltantes_por_activo:
+            movimientos_novedad_previos = (
+                self.db.query(Movimiento)
+                .filter(
+                    Movimiento.empresa_id == lev.empresa_id,
+                    Movimiento.tipo == "Novedad devolución",
+                    Movimiento.activo_id.in_(faltantes_por_activo.keys()),
+                    Movimiento.observaciones.ilike(f"%levantamiento físico #{lev.id}%"),
+                )
+                .order_by(Movimiento.created_at.desc(), Movimiento.id.desc())
+                .all()
+            )
+            ultima_novedad = {}
+            for movimiento in movimientos_novedad_previos:
+                ultima_novedad.setdefault(movimiento.activo_id, movimiento.observaciones or "")
+            for activo_id, nota in faltantes_por_activo.items():
+                if ultima_novedad.get(activo_id) == nota:
+                    continue
+                activo = activos_por_id[activo_id]
+                self.db.add(Movimiento(
+                    empresa_id=lev.empresa_id,
+                    activo_id=activo.id,
+                    persona_id=lev.responsable_id,
+                    ubicacion_id=lev.ubicacion_id,
+                    ubicacion_origen_id=lev.ubicacion_id,
+                    tipo="Novedad devolución",
+                    estado="Prestado",
+                    estado_entrega="Faltante reportado; continúa prestado",
+                    observaciones=nota,
+                    usuario=usuario,
+                    area=activo.area,
+                ))
+
+        # Lo que no fue recibido conserva su responsable y estado Prestado.
+        pendientes = self.db.query(Activo).filter(
+            Activo.empresa_id == lev.empresa_id,
+            Activo.id.in_(activos_ids_entregados),
+            Activo.activo.is_(True),
+            Activo.responsable_id == lev.responsable_id,
+            Activo.estado == "Prestado",
+        ).count()
+        lev.estado = "Devuelto parcialmente" if pendientes else "Devuelto"
         self.db.commit()
-        return devueltos
+        return {"devueltos": devueltos, "pendientes": pendientes, "estado": lev.estado}
 

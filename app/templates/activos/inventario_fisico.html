@@ -1,5 +1,5 @@
 {% extends "layouts/base.html" %}
-{% block extra_styles %}<link rel="stylesheet" href="/static/css/inventario_fisico.css">{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="/static/css/inventario_fisico.css?v=20261117-2">{% endblock %}
 {% block content %}
 <div class="page-header physical-head">
   <div>
@@ -48,17 +48,17 @@
 <section class="physical-card mt-4">
   <div class="card-title"><i class="bi bi-clock-history"></i> Levantamientos</div>
   <div class="table-responsive">
-    <table class="physical-table">
+    <table class="physical-table mobile-card-table physical-list-table">
       <thead><tr><th>Fecha</th><th>Ubicación</th><th>Responsable</th><th>Estado</th>{% if es_super_admin %}<th>Creado por</th>{% endif %}<th></th></tr></thead>
       <tbody>
       {% for item in levantamientos %}
       <tr>
-        <td>{{ item.created_at.strftime('%d/%m/%Y %H:%M') if item.created_at else '—' }}</td>
-        <td><strong>{{ item.ubicacion.nombre if item.ubicacion else '—' }}</strong>{% if item.ubicacion and item.ubicacion.curso %}<br><small>Curso: {{ item.ubicacion.curso }}</small>{% endif %}<br><small>{{ item.area }}</small></td>
-        <td>{{ item.responsable.nombre if item.responsable else '—' }}</td>
-        <td><span class="status status-{{ item.estado|lower|replace(' ','-')|replace('ó','o') }}">{{ item.estado }}</span></td>
-        {% if es_super_admin %}<td>{{ item.creador.nombre if item.creador else '—' }}{% if item.creador and item.creador.apellido %} {{ item.creador.apellido }}{% endif %}</td>{% endif %}
-        <td>
+        <td data-label="Fecha">{{ item.created_at.strftime('%d/%m/%Y %H:%M') if item.created_at else '—' }}</td>
+        <td data-label="Ubicación"><strong>{{ item.ubicacion.nombre if item.ubicacion else '—' }}</strong>{% if item.ubicacion and item.ubicacion.curso %}<br><small>Curso: {{ item.ubicacion.curso }}</small>{% endif %}<br><small>{{ item.area }}</small></td>
+        <td data-label="Responsable">{{ item.responsable.nombre if item.responsable else '—' }}</td>
+        <td data-label="Estado"><span class="status status-{{ item.estado|lower|replace(' ','-')|replace('ó','o') }}">{{ item.estado }}</span></td>
+        {% if es_super_admin %}<td data-label="Creado por">{{ item.creador.nombre if item.creador else '—' }}{% if item.creador and item.creador.apellido %} {{ item.creador.apellido }}{% endif %}</td>{% endif %}
+        <td data-label="Acciones">
           {% if item.estado == 'Pendiente de aprobación' and es_logistica %}
             <a class="btn btn-sm btn-primary" href="/activos/inventario-fisico/{{ item.id }}/revisar"><i class="bi bi-search"></i> Revisar</a>
           {% else %}
@@ -93,20 +93,20 @@
 
   {% if levantamiento.estado != 'Aprobado' %}
   <div class="table-responsive mt-3">
-    <table class="physical-table detail-table">
+    <table class="physical-table detail-table mobile-card-table">
       <thead><tr><th>Elemento</th><th>Referencia</th><th>Sistema</th><th>Encontrado</th><th>Estado físico</th><th>Observación</th><th>Origen</th><th></th></tr></thead>
       <tbody>
       {% if modo_revision|default(false) and levantamiento.estado == 'Pendiente de aprobación' %}
         {% for g in grupos_detalles %}
         <tr>
-          <td><strong>{{ g.nombre }}</strong><br><small class="existing-badge">{{ g.cantidad }} unidad(es) agrupadas</small>{% if g.categoria %}<br><small>{{ g.categoria.nombre }}</small>{% endif %}</td>
-          <td>{{ g.referencia_rango }}</td>
-          <td>{{ g.cantidad_sistema }}</td>
-          <td>{{ g.cantidad_encontrada }}</td>
-          <td>{{ g.estado_fisico or '—' }}</td>
-          <td>{{ g.observacion or '—' }}</td>
-          <td>{% if g.es_nuevo %}<span class="new-badge">Hallazgo nuevo</span>{% else %}<span class="existing-badge">Activos registrados</span>{% endif %}</td>
-          <td>
+          <td data-label="Elemento"><strong>{{ g.nombre }}</strong><br><small class="existing-badge">{{ g.cantidad }} unidad(es) agrupadas</small>{% if g.categoria %}<br><small>{{ g.categoria.nombre }}</small>{% endif %}</td>
+          <td data-label="Referencia">{{ g.referencia_rango }}</td>
+          <td data-label="Sistema">{{ g.cantidad_sistema }}</td>
+          <td data-label="Encontrado">{{ g.cantidad_encontrada }}</td>
+          <td data-label="Estado físico">{{ g.estado_fisico or '—' }}</td>
+          <td data-label="Observación">{{ g.observacion or '—' }}</td>
+          <td data-label="Origen">{% if g.es_nuevo %}<span class="new-badge">Hallazgo nuevo</span>{% else %}<span class="existing-badge">Activos registrados</span>{% endif %}</td>
+          <td data-label="Acciones">
             <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/grupo/verificar" data-ajax-review-form>
               <input type="hidden" name="detalle_ids_csv" value="{{ g.ids }}">
               <button type="submit" data-review-button data-verified="{{ 'true' if g.todos_verificados else 'false' }}" class="btn btn-sm {{ 'btn-success' if g.todos_verificados else 'btn-outline-primary' }}">{{ '✓ Grupo verificado' if g.todos_verificados else 'Revisar grupo' }}</button>
@@ -118,14 +118,14 @@
       {% else %}
         {% for d in levantamiento.detalles %}
         <tr>
-          <td><strong>{{ d.nombre }}</strong>{% if d.es_nuevo and d.cantidad_encontrada > 1 and not d.serial and not d.referencia %}<br><small class="existing-badge">{{ d.cantidad_encontrada }} unidades agrupadas</small>{% endif %}{% if d.categoria %}<br><small>{{ d.categoria.nombre }}</small>{% endif %}</td>
-          <td>{{ d.referencia or '—' }}</td>
-          <td>{{ d.cantidad_sistema }}</td>
-          <td>{% if levantamiento.estado == 'Borrador' and not modo_revision|default(false) %}<form method="post" action="/activos/inventario-fisico/detalle/{{ d.id }}" class="inline-edit"><input type="hidden" name="levantamiento_id" value="{{ levantamiento.id }}"><input type="number" name="cantidad_encontrada" min="0" value="{{ d.cantidad_encontrada }}"><select name="estado_fisico"><option {% if d.estado_fisico == 'Bueno' %}selected{% endif %}>Bueno</option><option {% if d.estado_fisico == 'Regular' %}selected{% endif %}>Regular</option><option {% if d.estado_fisico == 'Malo' %}selected{% endif %}>Malo</option><option {% if d.estado_fisico == 'No encontrado' %}selected{% endif %}>No encontrado</option><option {% if d.estado_fisico == 'Mantenimiento' %}selected{% endif %}>Mantenimiento</option></select><button class="btn btn-sm btn-outline-primary">Guardar</button></form>{% else %}{{ d.cantidad_encontrada }}{% endif %}</td>
-          <td>{{ d.estado_fisico }}</td>
-          <td>{{ d.observacion or '—' }}</td>
-          <td>{% if d.es_nuevo %}<span class="new-badge">Hallazgo nuevo</span>{% else %}<span class="existing-badge">Activo registrado</span>{% endif %}</td>
-          <td>{% if modo_revision|default(false) and levantamiento.estado == 'Pendiente de aprobación' %}<form method="post" action="/activos/inventario-fisico/detalle/{{ d.id }}/{{ 'desverificar' if d.verificado_logistica else 'verificar' }}"><input type="hidden" name="levantamiento_id" value="{{ levantamiento.id }}"><button class="btn btn-sm {{ 'btn-success' if d.verificado_logistica else 'btn-outline-primary' }}">{{ '✓ Verificado' if d.verificado_logistica else 'Revisar' }}</button></form>{% elif d.activo %}<a href="/activos/{{ d.activo.id }}/detalle" class="btn btn-sm btn-outline-secondary">Ver</a>{% endif %}</td>
+          <td data-label="Elemento"><strong>{{ d.nombre }}</strong>{% if d.es_nuevo and d.cantidad_encontrada > 1 and not d.serial and not d.referencia %}<br><small class="existing-badge">{{ d.cantidad_encontrada }} unidades agrupadas</small>{% endif %}{% if d.categoria %}<br><small>{{ d.categoria.nombre }}</small>{% endif %}</td>
+          <td data-label="Referencia">{{ d.referencia or '—' }}</td>
+          <td data-label="Sistema">{{ d.cantidad_sistema }}</td>
+          <td data-label="Encontrado">{% if levantamiento.estado == 'Borrador' and not modo_revision|default(false) %}<form method="post" action="/activos/inventario-fisico/detalle/{{ d.id }}" class="inline-edit"><input type="hidden" name="levantamiento_id" value="{{ levantamiento.id }}"><input type="number" name="cantidad_encontrada" min="0" value="{{ d.cantidad_encontrada }}"><select name="estado_fisico"><option {% if d.estado_fisico == 'Bueno' %}selected{% endif %}>Bueno</option><option {% if d.estado_fisico == 'Regular' %}selected{% endif %}>Regular</option><option {% if d.estado_fisico == 'Malo' %}selected{% endif %}>Malo</option><option {% if d.estado_fisico == 'No encontrado' %}selected{% endif %}>No encontrado</option><option {% if d.estado_fisico == 'Mantenimiento' %}selected{% endif %}>Mantenimiento</option></select><button class="btn btn-sm btn-outline-primary">Guardar</button></form>{% else %}{{ d.cantidad_encontrada }}{% endif %}</td>
+          <td data-label="Estado físico">{{ d.estado_fisico }}</td>
+          <td data-label="Observación">{{ d.observacion or '—' }}</td>
+          <td data-label="Origen">{% if d.es_nuevo %}<span class="new-badge">Hallazgo nuevo</span>{% else %}<span class="existing-badge">Activo registrado</span>{% endif %}</td>
+          <td data-label="Acciones">{% if modo_revision|default(false) and levantamiento.estado == 'Pendiente de aprobación' %}<form method="post" action="/activos/inventario-fisico/detalle/{{ d.id }}/{{ 'desverificar' if d.verificado_logistica else 'verificar' }}"><input type="hidden" name="levantamiento_id" value="{{ levantamiento.id }}"><button class="btn btn-sm {{ 'btn-success' if d.verificado_logistica else 'btn-outline-primary' }}">{{ '✓ Verificado' if d.verificado_logistica else 'Revisar' }}</button></form>{% elif d.activo %}<a href="/activos/{{ d.activo.id }}/detalle" class="btn btn-sm btn-outline-secondary">Ver</a>{% endif %}</td>
         </tr>
         {% else %}<tr><td colspan="8" class="empty">No hay elementos en esta revisión.</td></tr>{% endfor %}
       {% endif %}
@@ -168,46 +168,78 @@
   <div class="approval-box mt-4"><strong><i class="bi bi-shield-check"></i> Revisión de Logística</strong><p>Al aprobar, los hallazgos marcados como nuevos se incorporarán al inventario maestro con la ubicación seleccionada y quedarán registrados en el historial.</p><form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/aprobar"><button class="btn btn-success" onclick="return confirm('¿Aprobar la revisión e incorporar los hallazgos nuevos al inventario?')"><i class="bi bi-check2-circle"></i> Aprobar inventario</button></form></div>
   {% endif %}
 
-  {% if levantamiento.estado == 'Aprobado' %}
-  <div class="approval-box approved">
-    <i class="bi bi-check-circle-fill"></i> Aprobado por <strong>{{ levantamiento.aprobador.nombre if levantamiento.aprobador else '—' }}{% if levantamiento.aprobador and levantamiento.aprobador.apellido %} {{ levantamiento.aprobador.apellido }}{% endif %}</strong>{% if levantamiento.aprobado_at %} el {{ levantamiento.aprobado_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}.
+  {% if levantamiento.estado in ['Aprobado', 'Devuelto parcialmente', 'Devuelto'] %}
+  <div class="approval-box approved return-review-box" id="return-review-section">
+    {% if levantamiento.estado == 'Aprobado' %}
+      <i class="bi bi-check-circle-fill"></i> Aprobado por <strong>{{ levantamiento.aprobador.nombre if levantamiento.aprobador else '—' }}{% if levantamiento.aprobador and levantamiento.aprobador.apellido %} {{ levantamiento.aprobador.apellido }}{% endif %}</strong>{% if levantamiento.aprobado_at %} el {{ levantamiento.aprobado_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}.
+    {% elif levantamiento.estado == 'Devuelto parcialmente' %}
+      <i class="bi bi-exclamation-triangle-fill"></i> <strong>Devolución parcial.</strong> Los elementos faltantes siguen asignados a {{ levantamiento.responsable.nombre if levantamiento.responsable else 'el responsable' }}.
+    {% else %}
+      <i class="bi bi-check-circle-fill"></i> <strong>Devolución completa registrada.</strong>
+    {% endif %}
     {% if levantamiento.responsable %}
-      <p class="help mt-2 mb-3">Antes de devolver, revisa los artículos por grupos. Al marcar cada grupo como revisado, se habilitará la devolución completa.</p>
+      {% if levantamiento.estado != 'Devuelto' %}
+        <p class="help mt-2 mb-3">Registra cuántas unidades recibiste realmente y deja una observación cuando haya diferencias. Ejemplo: se entregaron 10 y regresan 8; registra 8 y explica qué pasó con las 2 faltantes. La observación es obligatoria cuando falten unidades. Los faltantes permanecerán prestados al responsable.</p>
+      {% else %}
+        <p class="help mt-2 mb-3">Resumen de cantidades y observaciones guardadas al recibir los artículos.</p>
+      {% endif %}
+      {% set resumen_devolucion = namespace(entregadas=0, recibidas=0, faltantes=0) %}
+      {% for g in grupos_detalles %}
+        {% set resumen_devolucion.entregadas = resumen_devolucion.entregadas + g.cantidad_entregada %}
+        {% set resumen_devolucion.recibidas = resumen_devolucion.recibidas + g.cantidad_devuelta %}
+        {% set resumen_devolucion.faltantes = resumen_devolucion.faltantes + g.cantidad_faltante %}
+      {% endfor %}
+      <div class="return-summary" id="return-summary"
+           data-delivered="{{ resumen_devolucion.entregadas }}"
+           data-returned="{{ resumen_devolucion.recibidas }}">
+        <div><span>Entregadas</span><strong id="return-total-delivered">{{ resumen_devolucion.entregadas }}</strong></div>
+        <div><span>Recibidas</span><strong id="return-total-returned">{{ resumen_devolucion.recibidas }}</strong></div>
+        <div><span>Faltantes</span><strong id="return-total-missing">{{ resumen_devolucion.faltantes }}</strong></div>
+      </div>
       <div class="table-responsive mt-3 mb-3">
-        <table class="physical-table detail-table">
-          <thead><tr><th>Elemento</th><th>Referencia / rango</th><th>Unidades</th><th>Estado físico</th><th>Revisión de devolución</th></tr></thead>
+        <table class="physical-table detail-table return-review-table">
+          <thead><tr><th>Elemento</th><th>Referencia / rango</th><th>Entregadas</th><th>Recibidas</th><th>Faltantes</th><th>Estado físico</th><th>Observación de devolución</th><th>Revisión</th></tr></thead>
           <tbody>
           {% for g in grupos_detalles %}
-            <tr>
-              <td><strong>{{ g.nombre }}</strong>{% if g.categoria %}<br><small>{{ g.categoria.nombre }}</small>{% endif %}</td>
-              <td>{{ g.referencia_rango }}</td>
-              <td>{{ g.cantidad }}</td>
-              <td>{{ g.estado_fisico or '—' }}</td>
-              <td>
-                <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/grupo/revisar-devolucion">
-                  <input type="hidden" name="detalle_ids_csv" value="{{ g.ids }}">
-                  <button class="btn btn-sm {{ 'btn-success' if g.todos_revisados_devolucion else 'btn-outline-primary' }}">
-                    {{ '✓ Revisado' if g.todos_revisados_devolucion else 'Marcar revisado' }}
-                  </button>
-                </form>
+            <tr class="return-group-row" data-delivered="{{ g.cantidad_entregada }}">
+              <td data-label="Elemento"><strong>{{ g.nombre }}</strong>{% if g.categoria %}<br><small>{{ g.categoria.nombre }}</small>{% endif %}</td>
+              <td data-label="Referencia / rango">{{ g.referencia_rango }}</td>
+              <td data-label="Entregadas"><strong>{{ g.cantidad_entregada }}</strong></td>
+              <td data-label="Recibidas">
+                {% if levantamiento.estado != 'Devuelto' and es_logistica|default(false) %}
+                  <input class="return-quantity" type="number" name="cantidad_devuelta" min="0" inputmode="numeric" max="{{ g.cantidad_entregada }}" step="1" value="{{ g.cantidad_devuelta }}" form="return-form-{{ loop.index }}" aria-label="Cantidad recibida de {{ g.nombre }}">
+                {% else %}<strong data-returned-value="{{ g.cantidad_devuelta }}">{{ g.cantidad_devuelta }}</strong>{% endif %}
+              </td>
+              <td data-label="Faltantes"><span class="return-missing-count">{{ g.cantidad_faltante }}</span></td>
+              <td data-label="Estado físico">{{ g.estado_fisico or '—' }}</td>
+              <td data-label="Observación de devolución">
+                {% if levantamiento.estado != 'Devuelto' and es_logistica|default(false) %}
+                  <textarea class="return-observation" name="observacion_devolucion" rows="2" maxlength="2000" placeholder="Ej. Se recibieron 8; 2 no aparecen. Indicar motivo si se conoce." form="return-form-{{ loop.index }}">{{ g.observacion_devolucion or '' }}</textarea>
+                {% else %}{{ g.observacion_devolucion or '—' }}{% endif %}
+                {% if g.devolucion_revisada_por %}<small class="d-block mt-1">Registró: {{ g.devolucion_revisada_por }}{% if g.devolucion_revisada_at %} · {{ g.devolucion_revisada_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}</small>{% endif %}
+              </td>
+              <td data-label="Revisión">
+                {% if levantamiento.estado != 'Devuelto' and es_logistica|default(false) %}
+                  <form id="return-form-{{ loop.index }}" method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/grupo/revisar-devolucion" data-ajax-return-form data-saved="{{ 'true' if g.todos_revisados_devolucion else 'false' }}">
+                    <input type="hidden" name="detalle_ids_csv" value="{{ g.ids }}">
+                    <button type="submit" class="btn btn-sm {{ 'btn-success' if g.todos_revisados_devolucion else 'btn-outline-primary' }}" data-return-save-button>{{ '✓ Guardado' if g.todos_revisados_devolucion else 'Guardar revisión' }}</button>
+                    <span class="return-feedback d-block mt-1" aria-live="polite">{% if g.todos_revisados_devolucion %}Guardado{% endif %}</span>
+                  </form>
+                {% else %}<span class="badge bg-success">{{ 'Registrado' if g.todos_revisados_devolucion else 'Solo Logística puede editar' }}</span>{% endif %}
               </td>
             </tr>
-          {% else %}<tr><td colspan="5" class="empty">No hay artículos para devolver.</td></tr>{% endfor %}
+          {% else %}<tr><td colspan="8" class="empty">No hay artículos para devolver.</td></tr>{% endfor %}
           </tbody>
         </table>
       </div>
       {% set devolucion_lista = levantamiento.detalles|length > 0 and (levantamiento.detalles|selectattr('revisado_devolucion')|list|length == levantamiento.detalles|length) %}
-      <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/devolver-todo" onsubmit="return confirm('¿Confirmas que el docente devuelve todos los activos asignados por esta revisión? Los activos volverán a quedar disponibles en la ubicación y sin responsable.')">
-        <button class="btn btn-warning" {% if not devolucion_lista %}disabled title="Marca todos los grupos como revisados para habilitar la devolución"{% endif %}><i class="bi bi-box-arrow-in-down"></i> Devolver todo a {{ levantamiento.responsable.nombre }}</button>
-        {% if not devolucion_lista %}<small class="d-block mt-2">Primero marca todos los grupos como revisados.</small>{% endif %}
-      </form>
+      {% if levantamiento.estado != 'Devuelto' and es_logistica|default(false) %}
+        <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/devolver-todo" id="register-return-form" onsubmit="return confirm('¿Registrar la devolución con las cantidades y observaciones guardadas? Los faltantes seguirán prestados al responsable.')">
+          <button id="register-return-button" class="btn btn-warning" {% if not devolucion_lista %}disabled title="Guarda la cantidad y observación de todos los grupos para habilitar la devolución"{% endif %}><i class="bi bi-box-arrow-in-down"></i> {% if levantamiento.estado == 'Devuelto parcialmente' %}Actualizar devolución{% else %}Registrar devolución{% endif %}</button>
+          <small id="return-review-hint" class="d-block mt-2">{% if not devolucion_lista %}Guarda la cantidad y observación de todos los grupos primero.{% elif resumen_devolucion.faltantes > 0 %}Se registrarán {{ resumen_devolucion.recibidas }} recibidas y {{ resumen_devolucion.faltantes }} faltantes; estos últimos seguirán prestados.{% else %}Todos los grupos están guardados y listos para registrar la devolución.{% endif %}</small>
+        </form>
+      {% endif %}
     {% endif %}
-  </div>
-  {% endif %}
-  {% if levantamiento.estado == 'Devuelto' %}
-  <div class="approval-box approved">
-    <i class="bi bi-check-circle-fill"></i> <strong>Devolución registrada.</strong>
-    <p class="help mt-2 mb-0">Los activos de este levantamiento fueron devueltos a la ubicación de origen y quedaron sin responsable. La devolución ya está registrada y no se puede ejecutar nuevamente desde aquí.</p>
   </div>
   {% endif %}
 </section>
@@ -215,5 +247,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/inventario_fisico.js?v=4" defer></script>
+<script src="/static/js/inventario_fisico.js?v=20261117-2" defer></script>
 {% endblock %}

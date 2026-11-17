@@ -14,7 +14,11 @@ from app.modules.auth.models import Usuario
 from app.modules.categorias.service import CategoriaService
 from app.modules.personas.service import PersonaService
 from app.modules.ubicaciones.service import UbicacionService
-from .levantamiento_service import LevantamientoService
+from .levantamiento_service import (
+    LevantamientoService,
+    cantidad_entregada_detalle,
+    cantidad_devuelta_detalle,
+)
 from .model import Activo
 from .levantamiento_model import LevantamientoDetalle
 from app.modules.categorias.model import Categoria
@@ -291,6 +295,12 @@ def _agrupar_detalles_vista(detalles):
             "observacion": primero.observacion,
             "es_nuevo": primero.es_nuevo,
             "cantidad": len(detalles_grupo),
+            "cantidad_entregada": sum(cantidad_entregada_detalle(d) for d in detalles_grupo),
+            "cantidad_devuelta": sum(cantidad_devuelta_detalle(d) for d in detalles_grupo),
+            "cantidad_faltante": sum(cantidad_entregada_detalle(d) for d in detalles_grupo) - sum(cantidad_devuelta_detalle(d) for d in detalles_grupo),
+            "observacion_devolucion": next((d.observacion_devolucion for d in detalles_grupo if d.observacion_devolucion), None),
+            "devolucion_revisada_por": next((d.devolucion_revisada_por for d in detalles_grupo if d.devolucion_revisada_por), None),
+            "devolucion_revisada_at": next((d.devolucion_revisada_at for d in detalles_grupo if d.devolucion_revisada_at), None),
             "todos_verificados": all(d.verificado_logistica for d in detalles_grupo),
             "todos_revisados_devolucion": all(getattr(d, "revisado_devolucion", False) for d in detalles_grupo),
             "alguno_verificado": any(d.verificado_logistica for d in detalles_grupo),
@@ -686,13 +696,16 @@ def verificar_grupo(levantamiento_id: int, request: Request, detalle_ids_csv: st
 @router.post("/{levantamiento_id}/grupo/revisar-devolucion")
 def revisar_grupo_devolucion(
     levantamiento_id: int,
+    request: Request,
     detalle_ids_csv: str = Form(...),
+    cantidad_devuelta: int = Form(...),
+    observacion_devolucion: str = Form(""),
     db: Session = Depends(get_db),
     user: Usuario = Depends(require_roles("Super Admin", "Superadministrador", "Administrador de Logística", "Admin de Logística")),
 ):
     area = user_area(user)
     lev = LevantamientoService(db).obtener(levantamiento_id, area)
-    if not lev or lev.estado != "Aprobado":
+    if not lev or lev.estado not in {"Aprobado", "Devuelto parcialmente"}:
         raise HTTPException(status_code=404, detail="No se encontró un levantamiento aprobado en tu área.")
     try:
         ids = {int(x) for x in detalle_ids_csv.split(",") if x.strip()}
@@ -707,10 +720,62 @@ def revisar_grupo_devolucion(
     ).all()
     if len(detalles) != len(ids):
         raise HTTPException(status_code=400, detail="Uno o más elementos no pertenecen a este levantamiento.")
-    marcar = not all(d.revisado_devolucion for d in detalles)
-    for d in detalles:
-        d.revisado_devolucion = marcar
+
+    cantidad_entregada = sum(cantidad_entregada_detalle(d) for d in detalles)
+    if cantidad_devuelta < 0 or cantidad_devuelta > cantidad_entregada:
+        raise HTTPException(
+            status_code=400,
+            detail=f"La cantidad recibida debe estar entre 0 y {cantidad_entregada}.",
+        )
+    if lev.estado == "Devuelto parcialmente":
+        cantidad_ya_registrada = sum(cantidad_devuelta_detalle(d) for d in detalles)
+        if cantidad_devuelta < cantidad_ya_registrada:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Ya se registraron {cantidad_ya_registrada} unidades devueltas de este grupo. "
+                    "No se puede reducir esa cantidad porque esos activos ya regresaron a bodega."
+                ),
+            )
+    observacion_limpia = observacion_devolucion.strip()
+    if cantidad_devuelta < cantidad_entregada and not observacion_limpia:
+        raise HTTPException(
+            status_code=400,
+            detail="Escribe una observación para explicar las unidades faltantes.",
+        )
+    if len(observacion_limpia) > 2000:
+        raise HTTPException(status_code=400, detail="La observación no puede superar 2.000 caracteres.")
+
+    # Distribuir la cantidad en detalle entre los registros individuales.
+    # Así una devolución de 8 sobre 10 conserva el vínculo de cada activo,
+    # dejando los otros 2 prestados y asignados al responsable.
+    restante = cantidad_devuelta
+    for detalle in sorted(detalles, key=lambda d: (str(d.referencia or "").casefold(), d.id)):
+        capacidad = cantidad_entregada_detalle(detalle)
+        asignada = min(capacidad, restante)
+        detalle.cantidad_devuelta = asignada
+        detalle.observacion_devolucion = observacion_limpia or None
+        detalle.revisado_devolucion = True
+        detalle.devolucion_revisada_por = _nombre_usuario(user)
+        detalle.devolucion_revisada_at = datetime.now(timezone.utc)
+        restante -= asignada
+
     db.commit()
+    observacion = observacion_limpia or ""
+    requested_with = (request.headers.get("x-requested-with") or "").strip().lower()
+    accept = (request.headers.get("accept") or "").lower()
+    wants_json = requested_with == "xmlhttprequest" or "application/json" in accept
+    resultado = {
+        "ok": True,
+        "delivered": cantidad_entregada,
+        "returned": cantidad_devuelta,
+        "missing": cantidad_entregada - cantidad_devuelta,
+        "observation": observacion,
+        "reviewed_by": _nombre_usuario(user),
+        "message": "Devolución guardada correctamente.",
+    }
+    if wants_json:
+        return JSONResponse(resultado)
     return RedirectResponse(url=f"/activos/inventario-fisico/?levantamiento_id={levantamiento_id}", status_code=303)
 
 

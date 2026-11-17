@@ -199,3 +199,74 @@ th.bg-white small {
 .btn-outline-danger:hover { color: #FFFFFF !important; background: #991B1B !important; }
 .btn-outline-success { color: #86EFAC !important; border-color: #4ADE80 !important; background: transparent !important; }
 .btn-outline-success:hover { color: #052E16 !important; background: #86EFAC !important; }
+
+
+/* Responsive general del panel: menú lateral tipo cajón y contenido sin desbordes. */
+@media (max-width: 768px) {
+  html, body { width: 100%; max-width: 100%; overflow-x: hidden; }
+  .wrapper { position: relative; width: 100%; min-width: 0; }
+  .sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0;
+    width: min(84vw, 292px) !important;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow-y: auto;
+    z-index: 1060;
+    transform: translateX(-105%);
+    transition: transform .25s ease;
+    box-shadow: 14px 0 36px rgba(0,0,0,.38);
+  }
+  .sidebar.mobile-open { transform: translateX(0); }
+  .sidebar.collapsed { width: min(84vw, 292px) !important; }
+  .sidebar.collapsed .logo { justify-content: flex-start; padding: 20px; }
+  .sidebar.collapsed .logo div,
+  .sidebar.collapsed .menu-title,
+  .sidebar.collapsed .menu-link span,
+  .sidebar.collapsed .logout a span { display: initial; }
+  .sidebar.collapsed .menu-link,
+  .sidebar.collapsed .logout a { justify-content: flex-start; padding: 14px 16px; }
+  .wrapper.sidebar-open::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    background: rgba(2,6,23,.68);
+    backdrop-filter: blur(2px);
+  }
+  .content { width: 100%; min-width: 0; max-width: 100%; margin-left: 0 !important; }
+  .topbar { height: auto; min-height: 62px; padding: 8px 12px !important; gap: 8px; }
+  .topbar #toggleSidebar { flex: 0 0 42px; width: 42px; height: 42px; font-size: 25px; }
+  .user-info { min-width: 0; gap: 8px; }
+  .user-info > div { min-width: 0; }
+  .user-info strong { display: inline-block; max-width: 48vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .82rem; }
+  .user-info small { display: inline-block; max-width: 55vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .68rem; }
+  .avatar { width: 36px !important; height: 36px !important; flex: 0 0 36px; }
+  .page-content { width: 100%; min-width: 0; padding: 14px !important; }
+  .page-header { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; }
+  .page-header h1 { font-size: 1.5rem; }
+  .cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; margin-top: 16px; }
+  .card-box { padding: 16px; min-width: 0; }
+  .card-box h3 { font-size: 1.8rem; }
+  .table-responsive { max-width: 100%; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+  .table-responsive > table { min-width: 620px; }
+  .table-responsive > .return-review-table { min-width: 0 !important; }
+  .modal-dialog { margin: 10px; }
+  .modal-content { max-width: calc(100vw - 20px); }
+  .row { --bs-gutter-x: .75rem; }
+  .public-wrap { padding: 12px 10px !important; }
+  .public-card { padding: 13px !important; margin-bottom: 12px !important; }
+  .public-card input, .public-card select, .public-card textarea { width: 100% !important; min-width: 0 !important; min-height: 42px !important; font-size: 16px !important; }
+  .public-table { min-width: 680px !important; }
+  .public-table textarea { min-width: 160px !important; }
+  .btn, button { min-height: 38px; }
+}
+
+@media (max-width: 420px) {
+  .page-content { padding: 10px !important; }
+  .topbar { padding: 7px 9px !important; }
+  .user-info strong { max-width: 42vw; }
+  .user-info small { max-width: 47vw; }
+  .page-header h1 { font-size: 1.3rem; }
+  .card-box { padding: 13px; }
+}
