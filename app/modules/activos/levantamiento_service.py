@@ -24,10 +24,30 @@ def cantidad_entregada_detalle(detalle):
 
 
 def cantidad_devuelta_detalle(detalle):
+    """Unidades del lote original que ya regresaron a bodega."""
     entregada = cantidad_entregada_detalle(detalle)
     if detalle.cantidad_devuelta is None:
         return entregada
     return max(0, min(entregada, int(detalle.cantidad_devuelta or 0)))
+
+
+def cantidad_sobrante_detalle(detalle):
+    """Unidades adicionales halladas, separadas de las unidades originalmente entregadas."""
+    return max(0, int(getattr(detalle, "cantidad_sobrante", 0) or 0))
+
+
+def calcular_diferencias_cantidad(entregadas, cantidad_actual):
+    """Devuelve (originales_recibidas, nuevas, faltantes) para el conteo final."""
+    entregadas = max(0, int(entregadas or 0))
+    cantidad_actual = max(0, int(cantidad_actual or 0))
+    originales_recibidas = min(entregadas, cantidad_actual)
+    nuevas = max(0, cantidad_actual - entregadas)
+    faltantes = max(0, entregadas - cantidad_actual)
+    return originales_recibidas, nuevas, faltantes
+
+
+def cantidad_total_encontrada_devolucion(detalle):
+    return cantidad_devuelta_detalle(detalle) + cantidad_sobrante_detalle(detalle)
 
 
 def _normalizar_grupo_detalle(detalle):
@@ -451,15 +471,16 @@ class LevantamientoService:
             .order_by(Movimiento.activo_id.asc(), Movimiento.id.asc())
             .all()
         )
-        if not movimientos_entrega:
+        if not movimientos_entrega and not any(cantidad_sobrante_detalle(d) > 0 for d in lev.detalles):
             raise ValueError("No se encontraron movimientos de entrega vinculados a este levantamiento.")
 
         resumen_grupos = {}
         for detalle in lev.detalles:
             clave = _normalizar_grupo_detalle(detalle)
-            resumen = resumen_grupos.setdefault(clave, {"entregadas": 0, "recibidas": 0, "observacion": None})
+            resumen = resumen_grupos.setdefault(clave, {"entregadas": 0, "recibidas": 0, "sobrantes": 0, "observacion": None})
             resumen["entregadas"] += cantidad_entregada_detalle(detalle)
             resumen["recibidas"] += cantidad_devuelta_detalle(detalle)
+            resumen["sobrantes"] += cantidad_sobrante_detalle(detalle)
             if detalle.observacion_devolucion:
                 resumen["observacion"] = detalle.observacion_devolucion
         for resumen in resumen_grupos.values():
@@ -532,7 +553,8 @@ class LevantamientoService:
             resumen_grupo = resumen_grupos.get(_normalizar_grupo_detalle(detalle), {})
             entregadas_grupo = int(resumen_grupo.get("entregadas", entregada))
             recibidas_grupo = int(resumen_grupo.get("recibidas", solicitada))
-            faltantes_grupo = int(resumen_grupo.get("faltantes", max(0, entregadas_grupo - recibidas_grupo)))
+            sobrantes_grupo = int(resumen_grupo.get("sobrantes", 0))
+            faltantes_grupo = max(0, entregadas_grupo - recibidas_grupo)
             observacion_grupo = (resumen_grupo.get("observacion") or detalle.observacion_devolucion or "").strip()
             detalle_id_tag = f"detalle_fisico_id={detalle.id}"
 
@@ -549,8 +571,8 @@ class LevantamientoService:
                 activo.ubicacion_id = lev.ubicacion_id
                 nota = (
                     f"Devolución del levantamiento físico #{lev.id}; {detalle_id_tag}. "
-                    f"Resumen del grupo: {recibidas_grupo} recibidas de {entregadas_grupo}; "
-                    f"faltantes reportados: {faltantes_grupo}. "
+                    f"Resumen del grupo: {recibidas_grupo} unidades originales recibidas de {entregadas_grupo}; "
+                    f"nuevas unidades encontradas: {sobrantes_grupo}; faltantes: {faltantes_grupo}. "
                     + (f"Observación de devolución: {observacion_grupo}. " if observacion_grupo else "")
                     + f"Registrado por {usuario}."
                 )
@@ -579,8 +601,8 @@ class LevantamientoService:
                     continue
                 nota = (
                     f"Novedad de devolución del levantamiento físico #{lev.id}; {detalle_id_tag}. "
-                    f"Resumen del grupo: {recibidas_grupo} recibidas de {entregadas_grupo}; "
-                    f"faltantes reportados: {faltantes_grupo}. "
+                    f"Resumen del grupo: {recibidas_grupo} unidades originales recibidas de {entregadas_grupo}; "
+                    f"nuevas unidades encontradas: {sobrantes_grupo}; faltantes: {faltantes_grupo}. "
                     + (f"Observación de devolución: {observacion_grupo}. " if observacion_grupo else "")
                     + f"El activo continúa prestado a {lev.responsable.nombre if lev.responsable else 'su responsable'}. "
                     + f"Registrado por {usuario}."
@@ -619,6 +641,99 @@ class LevantamientoService:
                     usuario=usuario,
                     area=activo.area,
                 ))
+
+        # Incorporar unidades adicionales detectadas por encima de lo originalmente
+        # entregado. Cada unidad se crea una sola vez: el marcador de movimiento evita
+        # duplicados cuando se vuelve a registrar una devolución parcial.
+        for detalle in sorted(lev.detalles, key=lambda d: d.id):
+            cantidad_nueva = cantidad_sobrante_detalle(detalle)
+            if cantidad_nueva <= 0:
+                continue
+            categoria = self.db.query(Categoria).filter(
+                Categoria.id == detalle.categoria_id,
+                Categoria.empresa_id == lev.empresa_id,
+            ).first()
+            if not categoria:
+                raise ValueError(
+                    f"No se pueden incorporar las unidades nuevas de '{detalle.nombre}': "
+                    "la categoría no existe en esta empresa."
+                )
+
+            marcador = f"sobrante_devolucion_levantamiento={lev.id}_detalle={detalle.id}"
+            movimientos_sobrante = self.db.query(Movimiento).filter(
+                Movimiento.empresa_id == lev.empresa_id,
+                Movimiento.tipo == "Alta por sobrante",
+                Movimiento.observaciones.ilike(f"%{marcador}%"),
+            ).all()
+            activos_sobrante_existentes = {m.activo_id for m in movimientos_sobrante if m.activo_id}
+            creados_antes = len(activos_sobrante_existentes)
+            if cantidad_nueva < creados_antes:
+                raise ValueError(
+                    f"Ya se incorporaron {creados_antes} unidades nuevas de '{detalle.nombre}'. "
+                    "No se puede reducir esa cantidad para evitar retirar del inventario unidades ya registradas."
+                )
+
+            prefijo = (categoria.prefijo or "ACT").strip().upper()[:10] or "ACT"
+            ultimo = self.db.query(Activo.id).order_by(Activo.id.desc()).first()
+            siguiente = (ultimo[0] if ultimo else 0) + 1
+            faltan_crear = cantidad_nueva - creados_antes
+            for _ in range(faltan_crear):
+                while True:
+                    codigo = f"{prefijo}{siguiente:06d}"
+                    codigo_barras = f"TEC-GLS-{siguiente:06d}"
+                    existe = self.db.query(Activo.id).filter(
+                        Activo.empresa_id == lev.empresa_id,
+                        (Activo.codigo == codigo) | (Activo.codigo_barras == codigo_barras),
+                    ).first()
+                    if not existe:
+                        break
+                    siguiente += 1
+
+                activo_nuevo = Activo(
+                    empresa_id=lev.empresa_id,
+                    codigo=codigo,
+                    codigo_barras=codigo_barras,
+                    serial=None,
+                    nombre=detalle.nombre,
+                    categoria_id=categoria.id,
+                    ubicacion_id=lev.ubicacion_id,
+                    marca=detalle.marca,
+                    modelo=detalle.modelo,
+                    estado="Disponible",
+                    responsable_id=None,
+                    tenedor_id=None,
+                    qr=codigo_barras,
+                    observaciones=(
+                        f"Unidad nueva incorporada por sobrante del levantamiento físico #{lev.id}. "
+                        + (f"Observación de devolución: {detalle.observacion_devolucion}. " if detalle.observacion_devolucion else "")
+                        + f"Registrada por {usuario}."
+                    ),
+                    area=lev.area,
+                    activo=True,
+                )
+                self.db.add(activo_nuevo)
+                self.db.flush()
+                self.db.add(Movimiento(
+                    empresa_id=lev.empresa_id,
+                    activo_id=activo_nuevo.id,
+                    persona_id=lev.responsable_id,
+                    ubicacion_id=lev.ubicacion_id,
+                    ubicacion_origen_id=lev.ubicacion_id,
+                    tipo="Alta por sobrante",
+                    estado="Disponible",
+                    estado_entrega="Nueva unidad incorporada a bodega",
+                    observaciones=(
+                        f"{marcador}; grupo={detalle.nombre}; "
+                        f"cantidad_nueva_grupo={cantidad_nueva}; "
+                        f"unidad={creados_antes + 1}; levantamiento={lev.id}. "
+                        + (f"Observación: {detalle.observacion_devolucion}. " if detalle.observacion_devolucion else "")
+                        + f"Registrada por {usuario}."
+                    ),
+                    usuario=usuario,
+                    area=lev.area,
+                ))
+                creados_antes += 1
+                siguiente += 1
 
         # Lo que no fue recibido conserva su responsable y estado Prestado.
         pendientes = self.db.query(Activo).filter(

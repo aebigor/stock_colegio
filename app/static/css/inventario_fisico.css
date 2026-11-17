@@ -3,7 +3,7 @@
 
 /* Devolución: tabla clara en escritorio y tarjetas legibles en móvil. */
 .return-review-box { min-width: 0; }
-.return-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0 8px; }
+.return-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 14px 0 8px; }
 .return-summary > div { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border: 1px solid rgba(148,163,184,.22); border-radius: 10px; background: rgba(7,17,31,.36); }
 .return-summary span { color: #aab9ce; font-size: .78rem; }
 .return-summary strong { color: #fff; font-size: 1.3rem; line-height: 1.2; }
@@ -39,7 +39,7 @@
   .physical-card .btn { min-height: 40px; white-space: normal; }
   .detail-head { flex-direction: column; }
   .notice, .approval-box { padding: 12px; font-size: .9rem; }
-  .return-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .return-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
   .return-summary > div { padding: 9px 8px; }
   .return-summary span { font-size: .68rem; }
   .return-summary strong { font-size: 1.1rem; }
@@ -54,6 +54,7 @@
   .return-review-table tbody tr td:nth-child(2),
   .return-review-table tbody tr td:nth-child(6),
   .return-review-table tbody tr td:nth-child(7),
+  .return-review-table tbody tr td:nth-child(8),
   .return-review-table tbody tr td:last-child { grid-column: 1 / -1; }
   .return-review-table .return-quantity { width: 100%; max-width: 130px; }
   .return-review-table .return-observation { min-width: 0; width: 100%; }
@@ -66,13 +67,14 @@
 }
 
 @media (max-width: 380px) {
-  .return-summary { grid-template-columns: 1fr; }
+  .return-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .return-review-table tbody tr { grid-template-columns: minmax(0, 1fr); }
   .return-review-table tbody tr td,
   .return-review-table tbody tr td:first-child,
   .return-review-table tbody tr td:nth-child(2),
   .return-review-table tbody tr td:nth-child(6),
   .return-review-table tbody tr td:nth-child(7),
+  .return-review-table tbody tr td:nth-child(8),
   .return-review-table tbody tr td:last-child { grid-column: 1; }
 }
 
@@ -113,4 +115,17 @@
 @media (max-width: 380px) {
   .mobile-card-table tbody tr { grid-template-columns: minmax(0, 1fr); }
   .mobile-card-table tbody td, .mobile-card-table tbody td:first-child, .mobile-card-table tbody td:nth-child(2), .mobile-card-table tbody td:nth-child(5), .mobile-card-table tbody td:nth-child(6), .mobile-card-table tbody td:last-child { grid-column: 1; }
+}
+
+/* Filtros de la revisión de devolución y unidades nuevas. */
+.return-filter-bar { display: grid; grid-template-columns: minmax(180px, 1.5fr) minmax(170px, 1fr) auto; align-items: end; gap: 10px; padding: 12px; margin: 12px 0; border: 1px solid rgba(148,163,184,.22); border-radius: 11px; background: rgba(7,17,31,.26); }
+.return-filter-bar label { display: block; margin: 0 0 5px; color: #aab9ce; font-size: .76rem; font-weight: 700; }
+.return-filter-bar input, .return-filter-bar select { width: 100%; min-width: 0; min-height: 40px; padding: 8px 10px; border: 1px solid #31435e; border-radius: 8px; background: #0b1422; color: #f4f8ff; }
+.return-filter-count { color: #aab9ce; font-size: .78rem; white-space: nowrap; }
+.return-review-table .return-surplus-count { display: inline-flex; min-width: 28px; justify-content: center; padding: 3px 8px; border-radius: 99px; background: rgba(59,130,246,.18); color: #93c5fd; font-weight: 800; }
+.return-review-table .return-surplus-count.zero { background: rgba(148,163,184,.12); color: #aab9ce; }
+.return-group-row[hidden] { display: none !important; }
+@media (max-width: 700px) {
+  .return-filter-bar { grid-template-columns: 1fr; gap: 8px; }
+  .return-filter-count { white-space: normal; }
 }

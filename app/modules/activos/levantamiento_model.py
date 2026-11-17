@@ -52,6 +52,9 @@ class LevantamientoDetalle(TenantScoped, Base):
     revisado_devolucion = Column(Boolean, nullable=False, default=False, server_default="false")
     # Datos independientes de la devolución: no sobrescriben el conteo original del docente.
     cantidad_devuelta = Column(Integer, nullable=True)
+    # Unidades adicionales encontradas por encima de las originalmente entregadas.
+    # Se incorporan al inventario como activos disponibles al registrar la devolución.
+    cantidad_sobrante = Column(Integer, nullable=False, default=0, server_default="0")
     observacion_devolucion = Column(Text, nullable=True)
     devolucion_revisada_por = Column(String(120), nullable=True)
     devolucion_revisada_at = Column(DateTime(timezone=True), nullable=True)

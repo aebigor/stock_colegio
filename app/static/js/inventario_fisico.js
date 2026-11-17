@@ -170,24 +170,35 @@
     const filas = Array.from(document.querySelectorAll(".return-group-row"));
     let entregadas = 0;
     let recibidas = 0;
+    let nuevasTotal = 0;
     filas.forEach((fila) => {
       const entregada = Math.max(0, Number.parseInt(fila.dataset.delivered || "0", 10) || 0);
       const campo = fila.querySelector(".return-quantity");
-      const recibida = campo
-        ? Math.max(0, Math.min(entregada, Number.parseInt(campo.value || "0", 10) || 0))
-        : Math.max(0, Number.parseInt(fila.querySelector("[data-returned-value]")?.dataset.returnedValue || "0", 10) || 0);
-      const faltante = Math.max(0, entregada - recibida);
+      const encontrada = campo
+        ? Math.max(0, Math.min(5000, Number.parseInt(campo.value || "0", 10) || 0))
+        : Math.max(0, Number.parseInt(fila.querySelector("[data-found-value]")?.dataset.foundValue || fila.dataset.found || "0", 10) || 0);
+      const recibida = Math.min(entregada, encontrada);
+      const nuevas = Math.max(0, encontrada - entregada);
+      const faltante = Math.max(0, entregada - encontrada);
       entregadas += entregada;
       recibidas += recibida;
+      nuevasTotal += nuevas;
       const indicador = fila.querySelector(".return-missing-count");
       if (indicador) {
         indicador.textContent = String(faltante);
         indicador.classList.toggle("zero", faltante === 0);
       }
+      const indicadorNuevas = fila.querySelector(".return-surplus-count");
+      if (indicadorNuevas) {
+        indicadorNuevas.textContent = String(nuevas);
+        indicadorNuevas.classList.toggle("zero", nuevas === 0);
+      }
+      fila.dataset.found = String(encontrada);
       const observacion = fila.querySelector(".return-observation");
       if (observacion) {
-        observacion.required = faltante > 0;
-        observacion.classList.toggle("is-invalid", faltante > 0 && !observacion.value.trim());
+        const hayDiferencia = faltante > 0 || nuevas > 0;
+        observacion.required = hayDiferencia;
+        observacion.classList.toggle("is-invalid", hayDiferencia && !observacion.value.trim());
       }
     });
 
@@ -196,9 +207,11 @@
       const faltantes = Math.max(0, entregadas - recibidas);
       const totalEntregadas = document.getElementById("return-total-delivered");
       const totalRecibidas = document.getElementById("return-total-returned");
+      const totalNuevas = document.getElementById("return-total-new");
       const totalFaltantes = document.getElementById("return-total-missing");
       if (totalEntregadas) totalEntregadas.textContent = String(entregadas);
-      if (totalRecibidas) totalRecibidas.textContent = String(recibidas);
+      if (totalRecibidas) totalRecibidas.textContent = String(recibidas + nuevasTotal);
+      if (totalNuevas) totalNuevas.textContent = String(nuevasTotal);
       if (totalFaltantes) totalFaltantes.textContent = String(faltantes);
     }
 
@@ -211,13 +224,47 @@
       if (!todosGuardados) {
         ayuda.textContent = "Guarda la cantidad y observación de todos los grupos primero.";
       } else {
-        const faltantes = Math.max(0, entregadas - recibidas);
-        ayuda.textContent = faltantes
-          ? `Se registrarán ${recibidas} recibidas y ${faltantes} faltantes; estos últimos seguirán prestados.`
+        const faltantes = Math.max(0, entregadas - recibidas - 0);
+        ayuda.textContent = (faltantes || nuevasTotal)
+          ? `Se registrarán ${recibidas} unidades originales, ${nuevasTotal} nuevas y ${faltantes} faltantes; los faltantes seguirán prestados.`
           : "Todos los grupos están guardados y listos para registrar la devolución.";
       }
     }
   }
+
+  function aplicarFiltrosDevolucion() {
+    const filas = Array.from(document.querySelectorAll(".return-group-row"));
+    const texto = (document.getElementById("return-search")?.value || "").trim().toLocaleLowerCase("es");
+    const filtro = document.getElementById("return-filter")?.value || "all";
+    let visibles = 0;
+    filas.forEach((fila) => {
+      const entregada = Math.max(0, Number.parseInt(fila.dataset.delivered || "0", 10) || 0);
+      const campo = fila.querySelector(".return-quantity");
+      const encontrada = campo
+        ? Math.max(0, Number.parseInt(campo.value || "0", 10) || 0)
+        : Math.max(0, Number.parseInt(fila.querySelector("[data-found-value]")?.dataset.foundValue || fila.dataset.found || "0", 10) || 0);
+      const faltante = Math.max(0, entregada - encontrada);
+      const nuevas = Math.max(0, encontrada - entregada);
+      const formulario = fila.querySelector("form[data-ajax-return-form]");
+      const guardado = formulario?.dataset.saved === "true";
+      const coincideTexto = !texto || (fila.dataset.search || "").toLocaleLowerCase("es").includes(texto);
+      let coincideEstado = true;
+      if (filtro === "missing") coincideEstado = faltante > 0;
+      else if (filtro === "surplus") coincideEstado = nuevas > 0;
+      else if (filtro === "difference") coincideEstado = faltante > 0 || nuevas > 0;
+      else if (filtro === "balanced") coincideEstado = faltante === 0 && nuevas === 0;
+      else if (filtro === "pending") coincideEstado = Boolean(formulario) && !guardado;
+      else if (filtro === "saved") coincideEstado = guardado || !formulario;
+      const mostrar = coincideTexto && coincideEstado;
+      fila.hidden = !mostrar;
+      if (mostrar) visibles += 1;
+    });
+    const contador = document.getElementById("return-filter-count");
+    if (contador) contador.textContent = `Mostrando ${visibles} de ${filas.length} grupos`;
+  }
+
+  document.getElementById("return-search")?.addEventListener("input", aplicarFiltrosDevolucion);
+  document.getElementById("return-filter")?.addEventListener("change", aplicarFiltrosDevolucion);
 
   document.addEventListener("input", (evento) => {
     const campo = evento.target;
@@ -240,6 +287,7 @@
       }
     }
     recalcularResumenDevolucion();
+    aplicarFiltrosDevolucion();
   });
 
   document.addEventListener("submit", async (evento) => {
@@ -256,21 +304,21 @@
     const campoObservacion = fila.querySelector(".return-observation");
     const entregada = Math.max(0, Number.parseInt(fila.dataset.delivered || "0", 10) || 0);
     const recibida = Math.max(0, Number.parseInt(inputCantidad?.value || "0", 10) || 0);
-    if (recibida > entregada) {
+    if (recibida > 5000) {
       if (feedback) {
-        feedback.textContent = `La cantidad no puede superar ${entregada}.`;
+        feedback.textContent = "La cantidad total no puede superar 5.000.";
         feedback.classList.add("is-error");
       }
       return;
     }
-    if (recibida < entregada && !campoObservacion?.value.trim()) {
+    if (recibida !== entregada && !campoObservacion?.value.trim()) {
       if (campoObservacion) {
         campoObservacion.required = true;
         campoObservacion.classList.add("is-invalid");
         campoObservacion.focus();
       }
       if (feedback) {
-        feedback.textContent = "Escribe por qué faltan unidades.";
+        feedback.textContent = "Explica por qué hay unidades faltantes o nuevas.";
         feedback.classList.add("is-error");
       }
       return;
@@ -313,11 +361,12 @@
       boton.classList.remove("btn-outline-primary");
       boton.classList.add("btn-success");
       if (feedback) {
-        feedback.textContent = `Guardado · ${resultado.returned}/${resultado.delivered} recibidas · ${resultado.missing} faltantes`;
+        feedback.textContent = `Guardado · ${resultado.found} encontradas · ${resultado.surplus} nuevas · ${resultado.missing} faltantes`;
         feedback.classList.remove("is-error");
       }
       if (campoObservacion) campoObservacion.classList.remove("is-invalid");
       recalcularResumenDevolucion();
+      aplicarFiltrosDevolucion();
     } catch (error) {
       formulario.dataset.saved = "false";
       boton.textContent = textoAnterior;
@@ -334,4 +383,5 @@
   });
 
   recalcularResumenDevolucion();
+  aplicarFiltrosDevolucion();
 })();

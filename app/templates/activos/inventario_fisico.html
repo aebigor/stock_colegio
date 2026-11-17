@@ -1,5 +1,5 @@
 {% extends "layouts/base.html" %}
-{% block extra_styles %}<link rel="stylesheet" href="/static/css/inventario_fisico.css?v=20261117-2">{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="/static/css/inventario_fisico.css?v=20261117-3">{% endblock %}
 {% block content %}
 <div class="page-header physical-head">
   <div>
@@ -179,42 +179,65 @@
     {% endif %}
     {% if levantamiento.responsable %}
       {% if levantamiento.estado != 'Devuelto' %}
-        <p class="help mt-2 mb-3">Registra cuántas unidades recibiste realmente y deja una observación cuando haya diferencias. Ejemplo: se entregaron 10 y regresan 8; registra 8 y explica qué pasó con las 2 faltantes. La observación es obligatoria cuando falten unidades. Los faltantes permanecerán prestados al responsable.</p>
+        <p class="help mt-2 mb-3">Registra la cantidad total que encontraste. Si se entregaron 10 y ahora hay 20, escribe 20: el sistema registra 10 unidades originales y 10 nuevas disponibles en bodega. Si ahora hay 8, registra 8: quedan 2 faltantes que continúan prestadas al responsable. Es obligatorio explicar cualquier diferencia.</p>
       {% else %}
         <p class="help mt-2 mb-3">Resumen de cantidades y observaciones guardadas al recibir los artículos.</p>
       {% endif %}
-      {% set resumen_devolucion = namespace(entregadas=0, recibidas=0, faltantes=0) %}
+      {% set resumen_devolucion = namespace(entregadas=0, recibidas=0, nuevas=0, faltantes=0) %}
       {% for g in grupos_detalles %}
         {% set resumen_devolucion.entregadas = resumen_devolucion.entregadas + g.cantidad_entregada %}
         {% set resumen_devolucion.recibidas = resumen_devolucion.recibidas + g.cantidad_devuelta %}
+        {% set resumen_devolucion.nuevas = resumen_devolucion.nuevas + g.cantidad_sobrante %}
         {% set resumen_devolucion.faltantes = resumen_devolucion.faltantes + g.cantidad_faltante %}
       {% endfor %}
       <div class="return-summary" id="return-summary"
            data-delivered="{{ resumen_devolucion.entregadas }}"
-           data-returned="{{ resumen_devolucion.recibidas }}">
+           data-returned="{{ resumen_devolucion.recibidas }}"
+           data-new="{{ resumen_devolucion.nuevas }}">
         <div><span>Entregadas</span><strong id="return-total-delivered">{{ resumen_devolucion.entregadas }}</strong></div>
-        <div><span>Recibidas</span><strong id="return-total-returned">{{ resumen_devolucion.recibidas }}</strong></div>
+        <div><span>Encontradas</span><strong id="return-total-returned">{{ resumen_devolucion.recibidas + resumen_devolucion.nuevas }}</strong></div>
+        <div><span>Nuevas unidades</span><strong id="return-total-new">{{ resumen_devolucion.nuevas }}</strong></div>
         <div><span>Faltantes</span><strong id="return-total-missing">{{ resumen_devolucion.faltantes }}</strong></div>
+      </div>
+      <div class="return-filter-bar" id="return-filter-bar">
+        <div>
+          <label for="return-search">Buscar artículo</label>
+          <input id="return-search" type="search" placeholder="Nombre, categoría o referencia…" autocomplete="off">
+        </div>
+        <div>
+          <label for="return-filter">Mostrar</label>
+          <select id="return-filter">
+            <option value="all">Todos los grupos</option>
+            <option value="missing">Con faltantes</option>
+            <option value="surplus">Con unidades nuevas</option>
+            <option value="difference">Con diferencias</option>
+            <option value="balanced">Sin diferencias</option>
+            <option value="pending">Pendientes de guardar</option>
+            <option value="saved">Guardados</option>
+          </select>
+        </div>
+        <span id="return-filter-count" class="return-filter-count" aria-live="polite"></span>
       </div>
       <div class="table-responsive mt-3 mb-3">
         <table class="physical-table detail-table return-review-table">
-          <thead><tr><th>Elemento</th><th>Referencia / rango</th><th>Entregadas</th><th>Recibidas</th><th>Faltantes</th><th>Estado físico</th><th>Observación de devolución</th><th>Revisión</th></tr></thead>
+          <thead><tr><th>Elemento</th><th>Referencia / rango</th><th>Entregadas</th><th>Cantidad actual encontrada</th><th>Nuevas unidades</th><th>Faltantes</th><th>Estado físico</th><th>Observación de devolución</th><th>Revisión</th></tr></thead>
           <tbody>
           {% for g in grupos_detalles %}
-            <tr class="return-group-row" data-delivered="{{ g.cantidad_entregada }}">
+            <tr class="return-group-row" data-delivered="{{ g.cantidad_entregada }}" data-found="{{ g.cantidad_encontrada_devolucion }}" data-search="{{ (g.nombre ~ ' ' ~ (g.categoria.nombre if g.categoria else '') ~ ' ' ~ g.referencia_rango)|lower|e }}">
               <td data-label="Elemento"><strong>{{ g.nombre }}</strong>{% if g.categoria %}<br><small>{{ g.categoria.nombre }}</small>{% endif %}</td>
               <td data-label="Referencia / rango">{{ g.referencia_rango }}</td>
               <td data-label="Entregadas"><strong>{{ g.cantidad_entregada }}</strong></td>
-              <td data-label="Recibidas">
+              <td data-label="Cantidad actual encontrada">
                 {% if levantamiento.estado != 'Devuelto' and es_logistica|default(false) %}
-                  <input class="return-quantity" type="number" name="cantidad_devuelta" min="0" inputmode="numeric" max="{{ g.cantidad_entregada }}" step="1" value="{{ g.cantidad_devuelta }}" form="return-form-{{ loop.index }}" aria-label="Cantidad recibida de {{ g.nombre }}">
-                {% else %}<strong data-returned-value="{{ g.cantidad_devuelta }}">{{ g.cantidad_devuelta }}</strong>{% endif %}
+                  <input class="return-quantity" type="number" name="cantidad_devuelta" min="0" max="5000" inputmode="numeric" step="1" value="{{ g.cantidad_encontrada_devolucion }}" form="return-form-{{ loop.index }}" aria-label="Cantidad total encontrada de {{ g.nombre }}">
+                {% else %}<strong data-found-value="{{ g.cantidad_encontrada_devolucion }}">{{ g.cantidad_encontrada_devolucion }}</strong>{% endif %}
               </td>
+              <td data-label="Nuevas unidades"><span class="return-surplus-count">{{ g.cantidad_sobrante }}</span></td>
               <td data-label="Faltantes"><span class="return-missing-count">{{ g.cantidad_faltante }}</span></td>
               <td data-label="Estado físico">{{ g.estado_fisico or '—' }}</td>
               <td data-label="Observación de devolución">
                 {% if levantamiento.estado != 'Devuelto' and es_logistica|default(false) %}
-                  <textarea class="return-observation" name="observacion_devolucion" rows="2" maxlength="2000" placeholder="Ej. Se recibieron 8; 2 no aparecen. Indicar motivo si se conoce." form="return-form-{{ loop.index }}">{{ g.observacion_devolucion or '' }}</textarea>
+                  <textarea class="return-observation" name="observacion_devolucion" rows="2" maxlength="2000" placeholder="Ej. Había 10 y se encontraron 20: llegaron 10 nuevas. O faltan 2. Explica la diferencia." form="return-form-{{ loop.index }}">{{ g.observacion_devolucion or '' }}</textarea>
                 {% else %}{{ g.observacion_devolucion or '—' }}{% endif %}
                 {% if g.devolucion_revisada_por %}<small class="d-block mt-1">Registró: {{ g.devolucion_revisada_por }}{% if g.devolucion_revisada_at %} · {{ g.devolucion_revisada_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}</small>{% endif %}
               </td>
@@ -228,15 +251,15 @@
                 {% else %}<span class="badge bg-success">{{ 'Registrado' if g.todos_revisados_devolucion else 'Solo Logística puede editar' }}</span>{% endif %}
               </td>
             </tr>
-          {% else %}<tr><td colspan="8" class="empty">No hay artículos para devolver.</td></tr>{% endfor %}
+          {% else %}<tr><td colspan="9" class="empty">No hay artículos para devolver.</td></tr>{% endfor %}
           </tbody>
         </table>
       </div>
       {% set devolucion_lista = levantamiento.detalles|length > 0 and (levantamiento.detalles|selectattr('revisado_devolucion')|list|length == levantamiento.detalles|length) %}
       {% if levantamiento.estado != 'Devuelto' and es_logistica|default(false) %}
-        <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/devolver-todo" id="register-return-form" onsubmit="return confirm('¿Registrar la devolución con las cantidades y observaciones guardadas? Los faltantes seguirán prestados al responsable.')">
+        <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/devolver-todo" id="register-return-form" onsubmit="return confirm('¿Registrar la devolución? Los faltantes seguirán prestados y las unidades nuevas se crearán disponibles en la bodega.')">
           <button id="register-return-button" class="btn btn-warning" {% if not devolucion_lista %}disabled title="Guarda la cantidad y observación de todos los grupos para habilitar la devolución"{% endif %}><i class="bi bi-box-arrow-in-down"></i> {% if levantamiento.estado == 'Devuelto parcialmente' %}Actualizar devolución{% else %}Registrar devolución{% endif %}</button>
-          <small id="return-review-hint" class="d-block mt-2">{% if not devolucion_lista %}Guarda la cantidad y observación de todos los grupos primero.{% elif resumen_devolucion.faltantes > 0 %}Se registrarán {{ resumen_devolucion.recibidas }} recibidas y {{ resumen_devolucion.faltantes }} faltantes; estos últimos seguirán prestados.{% else %}Todos los grupos están guardados y listos para registrar la devolución.{% endif %}</small>
+          <small id="return-review-hint" class="d-block mt-2">{% if not devolucion_lista %}Guarda la cantidad y observación de todos los grupos primero.{% elif resumen_devolucion.faltantes > 0 or resumen_devolucion.nuevas > 0 %}Se registrarán {{ resumen_devolucion.recibidas }} unidades originales recibidas, {{ resumen_devolucion.nuevas }} nuevas y {{ resumen_devolucion.faltantes }} faltantes; los faltantes seguirán prestados.{% else %}Todos los grupos están guardados y listos para registrar la devolución.{% endif %}</small>
         </form>
       {% endif %}
     {% endif %}
@@ -247,5 +270,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/inventario_fisico.js?v=20261117-2" defer></script>
+<script src="/static/js/inventario_fisico.js?v=20261117-3" defer></script>
 {% endblock %}

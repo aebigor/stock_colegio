@@ -18,6 +18,8 @@ from .levantamiento_service import (
     LevantamientoService,
     cantidad_entregada_detalle,
     cantidad_devuelta_detalle,
+    cantidad_sobrante_detalle,
+    calcular_diferencias_cantidad,
 )
 from .model import Activo
 from .levantamiento_model import LevantamientoDetalle
@@ -297,7 +299,9 @@ def _agrupar_detalles_vista(detalles):
             "cantidad": len(detalles_grupo),
             "cantidad_entregada": sum(cantidad_entregada_detalle(d) for d in detalles_grupo),
             "cantidad_devuelta": sum(cantidad_devuelta_detalle(d) for d in detalles_grupo),
-            "cantidad_faltante": sum(cantidad_entregada_detalle(d) for d in detalles_grupo) - sum(cantidad_devuelta_detalle(d) for d in detalles_grupo),
+            "cantidad_sobrante": sum(cantidad_sobrante_detalle(d) for d in detalles_grupo),
+            "cantidad_encontrada_devolucion": sum(cantidad_devuelta_detalle(d) + cantidad_sobrante_detalle(d) for d in detalles_grupo),
+            "cantidad_faltante": max(0, sum(cantidad_entregada_detalle(d) for d in detalles_grupo) - sum(cantidad_devuelta_detalle(d) for d in detalles_grupo)),
             "observacion_devolucion": next((d.observacion_devolucion for d in detalles_grupo if d.observacion_devolucion), None),
             "devolucion_revisada_por": next((d.devolucion_revisada_por for d in detalles_grupo if d.devolucion_revisada_por), None),
             "devolucion_revisada_at": next((d.devolucion_revisada_at for d in detalles_grupo if d.devolucion_revisada_at), None),
@@ -722,38 +726,52 @@ def revisar_grupo_devolucion(
         raise HTTPException(status_code=400, detail="Uno o más elementos no pertenecen a este levantamiento.")
 
     cantidad_entregada = sum(cantidad_entregada_detalle(d) for d in detalles)
-    if cantidad_devuelta < 0 or cantidad_devuelta > cantidad_entregada:
+    if cantidad_devuelta < 0 or cantidad_devuelta > 5000:
         raise HTTPException(
             status_code=400,
-            detail=f"La cantidad recibida debe estar entre 0 y {cantidad_entregada}.",
+            detail="La cantidad encontrada debe estar entre 0 y 5.000 unidades.",
         )
+    recibidas_originales, nuevas_unidades, faltantes = calcular_diferencias_cantidad(
+        cantidad_entregada, cantidad_devuelta
+    )
     if lev.estado == "Devuelto parcialmente":
         cantidad_ya_registrada = sum(cantidad_devuelta_detalle(d) for d in detalles)
-        if cantidad_devuelta < cantidad_ya_registrada:
+        nuevas_ya_registradas = sum(cantidad_sobrante_detalle(d) for d in detalles)
+        if recibidas_originales < cantidad_ya_registrada:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"Ya se registraron {cantidad_ya_registrada} unidades devueltas de este grupo. "
+                    f"Ya se registraron {cantidad_ya_registrada} unidades originales devueltas de este grupo. "
                     "No se puede reducir esa cantidad porque esos activos ya regresaron a bodega."
                 ),
             )
+        if nuevas_unidades < nuevas_ya_registradas:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Ya se incorporaron {nuevas_ya_registradas} unidades nuevas de este grupo. "
+                    "No se puede reducir esa cantidad porque ya forman parte del inventario."
+                ),
+            )
     observacion_limpia = observacion_devolucion.strip()
-    if cantidad_devuelta < cantidad_entregada and not observacion_limpia:
+    if (faltantes > 0 or nuevas_unidades > 0) and not observacion_limpia:
         raise HTTPException(
             status_code=400,
-            detail="Escribe una observación para explicar las unidades faltantes.",
+            detail="Escribe una observación para explicar las unidades faltantes o las unidades nuevas encontradas.",
         )
     if len(observacion_limpia) > 2000:
         raise HTTPException(status_code=400, detail="La observación no puede superar 2.000 caracteres.")
 
-    # Distribuir la cantidad en detalle entre los registros individuales.
-    # Así una devolución de 8 sobre 10 conserva el vínculo de cada activo,
-    # dejando los otros 2 prestados y asignados al responsable.
-    restante = cantidad_devuelta
-    for detalle in sorted(detalles, key=lambda d: (str(d.referencia or "").casefold(), d.id)):
+    # Distribuir primero las unidades originalmente entregadas entre sus activos.
+    # La diferencia positiva se almacena aparte y se incorpora como nuevos activos
+    # disponibles en bodega al confirmar la devolución general.
+    detalles_ordenados = sorted(detalles, key=lambda d: (str(d.referencia or "").casefold(), d.id))
+    restante = recibidas_originales
+    for indice, detalle in enumerate(detalles_ordenados):
         capacidad = cantidad_entregada_detalle(detalle)
         asignada = min(capacidad, restante)
         detalle.cantidad_devuelta = asignada
+        detalle.cantidad_sobrante = nuevas_unidades if indice == 0 else 0
         detalle.observacion_devolucion = observacion_limpia or None
         detalle.revisado_devolucion = True
         detalle.devolucion_revisada_por = _nombre_usuario(user)
@@ -768,8 +786,10 @@ def revisar_grupo_devolucion(
     resultado = {
         "ok": True,
         "delivered": cantidad_entregada,
-        "returned": cantidad_devuelta,
-        "missing": cantidad_entregada - cantidad_devuelta,
+        "returned": recibidas_originales,
+        "found": cantidad_devuelta,
+        "surplus": nuevas_unidades,
+        "missing": faltantes,
         "observation": observacion,
         "reviewed_by": _nombre_usuario(user),
         "message": "Devolución guardada correctamente.",
