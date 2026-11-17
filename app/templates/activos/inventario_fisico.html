@@ -1,5 +1,5 @@
 {% extends "layouts/base.html" %}
-{% block extra_styles %}<link rel="stylesheet" href="/static/css/inventario_fisico.css?v=20261117-3">{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="/static/css/inventario_fisico.css?v=20261117-4">{% endblock %}
 {% block content %}
 <div class="page-header physical-head">
   <div>
@@ -99,13 +99,13 @@
       {% if modo_revision|default(false) and levantamiento.estado == 'Pendiente de aprobación' %}
         {% for g in grupos_detalles %}
         <tr>
-          <td data-label="Elemento"><strong>{{ g.nombre }}</strong><br><small class="existing-badge">{{ g.cantidad }} unidad(es) agrupadas</small>{% if g.categoria %}<br><small>{{ g.categoria.nombre }}</small>{% endif %}</td>
+          <td data-label="Elemento"><strong>{{ g.nombre }}</strong><br><small class="existing-badge">{{ g.cantidad }} unidad(es) agrupadas</small>{% if g.categoria %}<br><small>{{ g.categoria.nombre }}</small>{% endif %}{% if g.marca %}<br><small>Marca: {{ g.marca }}</small>{% endif %}{% if g.modelo %}<br><small>Modelo: {{ g.modelo }}</small>{% endif %}{% if g.serial %}<br><small>Serial: {{ g.serial }}</small>{% endif %}{% if g.descripcion %}<br><small>{{ g.descripcion }}</small>{% endif %}</td>
           <td data-label="Referencia">{{ g.referencia_rango }}</td>
           <td data-label="Sistema">{{ g.cantidad_sistema }}</td>
           <td data-label="Encontrado">{{ g.cantidad_encontrada }}</td>
           <td data-label="Estado físico">{{ g.estado_fisico or '—' }}</td>
           <td data-label="Observación">{{ g.observacion or '—' }}</td>
-          <td data-label="Origen">{% if g.es_nuevo %}<span class="new-badge">Hallazgo nuevo</span>{% else %}<span class="existing-badge">Activos registrados</span>{% endif %}</td>
+          <td data-label="Origen">{% if g.alta_logistica %}<span class="new-badge">Alta nueva de Logística</span>{% elif g.es_nuevo %}<span class="new-badge">Hallazgo del docente</span>{% else %}<span class="existing-badge">Activos registrados</span>{% endif %}</td>
           <td data-label="Acciones">
             <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/grupo/verificar" data-ajax-review-form>
               <input type="hidden" name="detalle_ids_csv" value="{{ g.ids }}">
@@ -118,13 +118,13 @@
       {% else %}
         {% for d in levantamiento.detalles %}
         <tr>
-          <td data-label="Elemento"><strong>{{ d.nombre }}</strong>{% if d.es_nuevo and d.cantidad_encontrada > 1 and not d.serial and not d.referencia %}<br><small class="existing-badge">{{ d.cantidad_encontrada }} unidades agrupadas</small>{% endif %}{% if d.categoria %}<br><small>{{ d.categoria.nombre }}</small>{% endif %}</td>
+          <td data-label="Elemento"><strong>{{ d.nombre }}</strong>{% if d.es_nuevo and d.cantidad_encontrada > 1 and not d.serial and not d.referencia %}<br><small class="existing-badge">{{ d.cantidad_encontrada }} unidades agrupadas</small>{% endif %}{% if d.categoria %}<br><small>{{ d.categoria.nombre }}</small>{% endif %}{% if d.marca %}<br><small>Marca: {{ d.marca }}</small>{% endif %}{% if d.modelo %}<br><small>Modelo: {{ d.modelo }}</small>{% endif %}{% if d.serial %}<br><small>Serial: {{ d.serial }}</small>{% endif %}{% if d.descripcion %}<br><small>{{ d.descripcion }}</small>{% endif %}</td>
           <td data-label="Referencia">{{ d.referencia or '—' }}</td>
           <td data-label="Sistema">{{ d.cantidad_sistema }}</td>
           <td data-label="Encontrado">{% if levantamiento.estado == 'Borrador' and not modo_revision|default(false) %}<form method="post" action="/activos/inventario-fisico/detalle/{{ d.id }}" class="inline-edit"><input type="hidden" name="levantamiento_id" value="{{ levantamiento.id }}"><input type="number" name="cantidad_encontrada" min="0" value="{{ d.cantidad_encontrada }}"><select name="estado_fisico"><option {% if d.estado_fisico == 'Bueno' %}selected{% endif %}>Bueno</option><option {% if d.estado_fisico == 'Regular' %}selected{% endif %}>Regular</option><option {% if d.estado_fisico == 'Malo' %}selected{% endif %}>Malo</option><option {% if d.estado_fisico == 'No encontrado' %}selected{% endif %}>No encontrado</option><option {% if d.estado_fisico == 'Mantenimiento' %}selected{% endif %}>Mantenimiento</option></select><button class="btn btn-sm btn-outline-primary">Guardar</button></form>{% else %}{{ d.cantidad_encontrada }}{% endif %}</td>
           <td data-label="Estado físico">{{ d.estado_fisico }}</td>
           <td data-label="Observación">{{ d.observacion or '—' }}</td>
-          <td data-label="Origen">{% if d.es_nuevo %}<span class="new-badge">Hallazgo nuevo</span>{% else %}<span class="existing-badge">Activo registrado</span>{% endif %}</td>
+          <td data-label="Origen">{% if d.alta_logistica %}<span class="new-badge">Alta nueva de Logística</span>{% elif d.es_nuevo %}<span class="new-badge">Hallazgo del docente</span>{% else %}<span class="existing-badge">Activo registrado</span>{% endif %}</td>
           <td data-label="Acciones">{% if modo_revision|default(false) and levantamiento.estado == 'Pendiente de aprobación' %}<form method="post" action="/activos/inventario-fisico/detalle/{{ d.id }}/{{ 'desverificar' if d.verificado_logistica else 'verificar' }}"><input type="hidden" name="levantamiento_id" value="{{ levantamiento.id }}"><button class="btn btn-sm {{ 'btn-success' if d.verificado_logistica else 'btn-outline-primary' }}">{{ '✓ Verificado' if d.verificado_logistica else 'Revisar' }}</button></form>{% elif d.activo %}<a href="/activos/{{ d.activo.id }}/detalle" class="btn btn-sm btn-outline-secondary">Ver</a>{% endif %}</td>
         </tr>
         {% else %}<tr><td colspan="8" class="empty">No hay elementos en esta revisión.</td></tr>{% endfor %}
@@ -132,6 +132,27 @@
       </tbody>
     </table>
   </div>
+  {% endif %}
+
+  {% if levantamiento.estado == 'Pendiente de aprobación' and es_logistica|default(false) and modo_revision|default(false) %}
+  <section class="add-found logistics-new-asset mt-4" id="logistics-new-asset">
+    <div class="card-title"><i class="bi bi-box-seam"></i> Agregar artículo nuevo al inventario</div>
+    <p class="help">Usa esta sección para artículos que acaban de llegar al colegio y no existían en el inventario. Cada marca o modelo diferente debe registrarse en una línea independiente. Al aprobar el levantamiento se crearán los activos con código, código de barras y QR, disponibles en la ubicación revisada.</p>
+    <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/alta-nueva" class="row g-3 logistics-new-asset-form">
+      <div class="col-12 col-md-5"><label>Nombre del artículo *</label><input name="nombre" required maxlength="150" placeholder="Ej. Pila recargable AA"></div>
+      <div class="col-12 col-md-4"><label>Categoría *</label><select name="categoria_id" required><option value="">Seleccione...</option>{% for c in categorias %}<option value="{{ c.id }}">{{ c.nombre }}</option>{% endfor %}</select></div>
+      <div class="col-6 col-md-3"><label>Cantidad *</label><input name="cantidad" type="number" min="1" max="500" value="1" required></div>
+      <div class="col-6 col-md-3"><label>Marca</label><input name="marca" maxlength="100" placeholder="Ej. Duracell"></div>
+      <div class="col-6 col-md-3"><label>Modelo</label><input name="modelo" maxlength="100"></div>
+      <div class="col-6 col-md-3"><label>Serial</label><input name="serial" maxlength="150" placeholder="Solo si cantidad es 1"></div>
+      <div class="col-12 col-md-3"><label>Referencia / código proveedor</label><input name="referencia" maxlength="180"></div>
+      <div class="col-12"><label>Descripción</label><textarea name="descripcion" rows="2" maxlength="2000" placeholder="Características, capacidad, presentación, medidas, etc."></textarea></div>
+      <div class="col-12 col-md-4"><label>Estado físico</label><select name="estado_fisico"><option>Bueno</option><option>Regular</option><option>Malo</option><option>Mantenimiento</option></select></div>
+      <div class="col-12 col-md-8"><label>Observación de ingreso</label><textarea name="observacion" rows="2" maxlength="2000" placeholder="Ej. Ingreso por compra, factura, fecha o motivo de la incorporación."></textarea></div>
+      <div class="col-12 logistics-new-asset-actions"><button class="btn btn-primary"><i class="bi bi-plus-circle"></i> Agregar artículo a la revisión</button></div>
+    </form>
+    <small class="help d-block mt-2">La ubicación de ingreso será: <strong>{{ levantamiento.ubicacion.nombre if levantamiento.ubicacion else 'Ubicación del levantamiento' }}</strong>. El artículo no se incorpora al inventario maestro hasta que Logística apruebe la revisión.</small>
+  </section>
   {% endif %}
 
   {% if levantamiento.estado == 'Borrador' %}
@@ -165,7 +186,7 @@
   {% endif %}
 
   {% if levantamiento.estado == 'Pendiente de aprobación' and es_logistica and modo_revision|default(false) %}
-  <div class="approval-box mt-4"><strong><i class="bi bi-shield-check"></i> Revisión de Logística</strong><p>Al aprobar, los hallazgos marcados como nuevos se incorporarán al inventario maestro con la ubicación seleccionada y quedarán registrados en el historial.</p><form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/aprobar"><button class="btn btn-success" onclick="return confirm('¿Aprobar la revisión e incorporar los hallazgos nuevos al inventario?')"><i class="bi bi-check2-circle"></i> Aprobar inventario</button></form></div>
+  <div class="approval-box mt-4"><strong><i class="bi bi-shield-check"></i> Revisión de Logística</strong><p>Al aprobar, los hallazgos registrados por el docente se asignarán al responsable. Las altas nuevas de Logística se incorporarán como artículos disponibles en la ubicación revisada. Todos recibirán sus códigos y quedarán registrados en el historial.</p><form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/aprobar"><button class="btn btn-success" onclick="return confirm('¿Aprobar la revisión e incorporar los hallazgos nuevos al inventario?')"><i class="bi bi-check2-circle"></i> Aprobar inventario</button></form></div>
   {% endif %}
 
   {% if levantamiento.estado in ['Aprobado', 'Devuelto parcialmente', 'Devuelto'] %}
@@ -184,7 +205,7 @@
         <p class="help mt-2 mb-3">Resumen de cantidades y observaciones guardadas al recibir los artículos.</p>
       {% endif %}
       {% set resumen_devolucion = namespace(entregadas=0, recibidas=0, nuevas=0, faltantes=0) %}
-      {% for g in grupos_detalles %}
+      {% for g in grupos_devolucion %}
         {% set resumen_devolucion.entregadas = resumen_devolucion.entregadas + g.cantidad_entregada %}
         {% set resumen_devolucion.recibidas = resumen_devolucion.recibidas + g.cantidad_devuelta %}
         {% set resumen_devolucion.nuevas = resumen_devolucion.nuevas + g.cantidad_sobrante %}
@@ -222,7 +243,7 @@
         <table class="physical-table detail-table return-review-table">
           <thead><tr><th>Elemento</th><th>Referencia / rango</th><th>Entregadas</th><th>Cantidad actual encontrada</th><th>Nuevas unidades</th><th>Faltantes</th><th>Estado físico</th><th>Observación de devolución</th><th>Revisión</th></tr></thead>
           <tbody>
-          {% for g in grupos_detalles %}
+          {% for g in grupos_devolucion %}
             <tr class="return-group-row" data-delivered="{{ g.cantidad_entregada }}" data-found="{{ g.cantidad_encontrada_devolucion }}" data-search="{{ (g.nombre ~ ' ' ~ (g.categoria.nombre if g.categoria else '') ~ ' ' ~ g.referencia_rango)|lower|e }}">
               <td data-label="Elemento"><strong>{{ g.nombre }}</strong>{% if g.categoria %}<br><small>{{ g.categoria.nombre }}</small>{% endif %}</td>
               <td data-label="Referencia / rango">{{ g.referencia_rango }}</td>
@@ -255,7 +276,8 @@
           </tbody>
         </table>
       </div>
-      {% set devolucion_lista = levantamiento.detalles|length > 0 and (levantamiento.detalles|selectattr('revisado_devolucion')|list|length == levantamiento.detalles|length) %}
+      {% set detalles_para_devolver = levantamiento.detalles|rejectattr('alta_logistica')|list %}
+      {% set devolucion_lista = detalles_para_devolver|length > 0 and (detalles_para_devolver|selectattr('revisado_devolucion')|list|length == detalles_para_devolver|length) %}
       {% if levantamiento.estado != 'Devuelto' and es_logistica|default(false) %}
         <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/devolver-todo" id="register-return-form" onsubmit="return confirm('¿Registrar la devolución? Los faltantes seguirán prestados y las unidades nuevas se crearán disponibles en la bodega.')">
           <button id="register-return-button" class="btn btn-warning" {% if not devolucion_lista %}disabled title="Guarda la cantidad y observación de todos los grupos para habilitar la devolución"{% endif %}><i class="bi bi-box-arrow-in-down"></i> {% if levantamiento.estado == 'Devuelto parcialmente' %}Actualizar devolución{% else %}Registrar devolución{% endif %}</button>
@@ -270,5 +292,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/inventario_fisico.js?v=20261117-3" defer></script>
+<script src="/static/js/inventario_fisico.js?v=20261117-4" defer></script>
 {% endblock %}

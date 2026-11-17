@@ -267,7 +267,8 @@ def _agrupar_detalles_vista(detalles):
             key = (
                 _normalizar(d.nombre), d.categoria_id or 0,
                 _normalizar(d.marca), _normalizar(d.modelo),
-                bool(d.es_nuevo), (d.estado_fisico or "").strip().casefold(),
+                bool(d.es_nuevo), bool(getattr(d, "alta_logistica", False)),
+                (d.estado_fisico or "").strip().casefold(),
                 (d.observacion or "").strip().casefold(),
             )
         grupos.setdefault(key, []).append(d)
@@ -295,7 +296,12 @@ def _agrupar_detalles_vista(detalles):
             "referencia_rango": rango,
             "estado_fisico": primero.estado_fisico,
             "observacion": primero.observacion,
+            "marca": primero.marca,
+            "modelo": primero.modelo,
+            "serial": primero.serial,
             "es_nuevo": primero.es_nuevo,
+            "alta_logistica": bool(getattr(primero, "alta_logistica", False)),
+            "descripcion": getattr(primero, "descripcion", None),
             "cantidad": len(detalles_grupo),
             "cantidad_entregada": sum(cantidad_entregada_detalle(d) for d in detalles_grupo),
             "cantidad_devuelta": sum(cantidad_devuelta_detalle(d) for d in detalles_grupo),
@@ -311,6 +317,11 @@ def _agrupar_detalles_vista(detalles):
             "activo": primero.activo,
         })
     return sorted(resultado, key=lambda g: (str(g["nombre"] or "").casefold(), g["referencia_rango"]))
+
+
+def _agrupar_detalles_devolucion(detalles):
+    """Oculta las altas nuevas de Logística del checklist de devolución al docente."""
+    return [g for g in _agrupar_detalles_vista(detalles) if not g.get("alta_logistica")]
 
 
 def _es_logistica(user: Usuario) -> bool:
@@ -395,6 +406,7 @@ def index(request: Request, levantamiento_id: int | None = None, db: Session = D
             "levantamientos": levantamientos,
             "levantamiento": levantamiento,
             "grupos_detalles": _agrupar_detalles_vista(levantamiento.detalles) if levantamiento else [],
+            "grupos_devolucion": _agrupar_detalles_devolucion(levantamiento.detalles) if levantamiento else [],
             "ubicaciones": ubicaciones,
             "personas": personas,
             "categorias": categorias,
@@ -445,6 +457,46 @@ def editar_detalle(detalle_id: int, cantidad_encontrada: int = Form(...), estado
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return RedirectResponse(url=f"/activos/inventario-fisico/?levantamiento_id={levantamiento_id}", status_code=303)
+
+
+@router.post("/{levantamiento_id}/alta-nueva")
+def agregar_alta_nueva_logistica(
+    levantamiento_id: int,
+    nombre: str = Form(...),
+    categoria_id: int = Form(...),
+    cantidad: int = Form(1),
+    marca: str = Form(""),
+    modelo: str = Form(""),
+    serial: str = Form(""),
+    referencia: str = Form(""),
+    descripcion: str = Form(""),
+    estado_fisico: str = Form("Bueno"),
+    observacion: str = Form(""),
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(require_roles("Super Admin", "Superadministrador", "Administrador de Logística", "Admin de Logística")),
+):
+    area = user_area(user)
+    lev = LevantamientoService(db).obtener(levantamiento_id, area)
+    if not lev or lev.estado != "Pendiente de aprobación":
+        raise HTTPException(status_code=404, detail="No se encontró una revisión pendiente en tu área.")
+    try:
+        LevantamientoService(db).agregar_alta_logistica(
+            levantamiento_id=levantamiento_id,
+            usuario_nombre=_nombre_usuario(user),
+            nombre=nombre,
+            categoria_id=categoria_id,
+            cantidad=cantidad,
+            marca=marca,
+            modelo=modelo,
+            serial=serial,
+            referencia=referencia,
+            descripcion=descripcion,
+            estado_fisico=estado_fisico,
+            observacion=observacion,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return RedirectResponse(url=f"/activos/inventario-fisico/{levantamiento_id}/revisar", status_code=303)
 
 
 @router.post("/importar-excel")
@@ -632,7 +684,8 @@ def revisar(levantamiento_id: int, request: Request, db: Session = Depends(get_d
         raise HTTPException(status_code=404, detail="Levantamiento no encontrado en tu área.")
     return templates.TemplateResponse(request=request, name="activos/inventario_fisico.html", context={
         "title": "Revisar inventario físico", "levantamientos": LevantamientoService(db).listar("Todas"),
-        "levantamiento": lev, "grupos_detalles": _agrupar_detalles_vista(lev.detalles), "ubicaciones": UbicacionService(db).listar("Todas"),
+        "levantamiento": lev, "grupos_detalles": _agrupar_detalles_vista(lev.detalles),
+        "grupos_devolucion": _agrupar_detalles_devolucion(lev.detalles), "ubicaciones": UbicacionService(db).listar("Todas"),
         "personas": PersonaService(db).listar(), "categorias": CategoriaService(db).listar(estado="Activas"),
         "area": area_consulta, "usuario_actual": _nombre_usuario(user), "es_logistica": True, "modo_revision": True,
         "es_super_admin": bool(user.rol and user.rol.nombre in SUPER_ADMIN_ROLES), "current_user_id": user.id,

@@ -47,6 +47,10 @@ class LevantamientoDetalle(TenantScoped, Base):
     estado_fisico = Column(String(40), nullable=False, default="Bueno")
     observacion = Column(Text)
     es_nuevo = Column(Boolean, nullable=False, default=False)
+    # Diferencia un hallazgo declarado por el docente (que se entrega al responsable)
+    # de un alta nueva capturada por Logística durante la revisión (queda disponible en bodega).
+    alta_logistica = Column(Boolean, nullable=False, default=False, server_default="false")
+    descripcion = Column(Text, nullable=True)
     verificado_logistica = Column(Boolean, nullable=False, default=False)
     # Confirmación independiente para el checklist de devolución posterior a la entrega.
     revisado_devolucion = Column(Boolean, nullable=False, default=False, server_default="false")
