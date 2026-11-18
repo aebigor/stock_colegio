@@ -145,6 +145,123 @@ def _reconstruir_categoria_vertical(page, cell):
     return texto.strip()
 
 
+def _agrupar_palabras_en_lineas(palabras, tolerancia_y=3.2):
+    """Agrupa palabras del PDF por renglón usando su coordenada vertical."""
+    lineas = []
+    for palabra in sorted(palabras or [], key=lambda p: (p.get("top", 0), p.get("x0", 0))):
+        top = float(palabra.get("top", 0))
+        destino = next((linea for linea in reversed(lineas[-3:])
+                        if abs(linea["top"] - top) <= tolerancia_y), None)
+        if destino is None:
+            lineas.append({"top": top, "palabras": [palabra]})
+        else:
+            destino["palabras"].append(palabra)
+            destino["top"] = sum(float(w.get("top", top)) for w in destino["palabras"]) / len(destino["palabras"])
+    for linea in lineas:
+        linea["palabras"].sort(key=lambda p: p.get("x0", 0))
+    return lineas
+
+
+def _filas_pdf_por_columnas_de_texto(page, layout_anterior=None, categoria_anterior="", numero_pagina=1):
+    """Lee renglones por coordenadas aunque la página no tenga bordes de tabla.
+
+    El mapa de columnas se detecta en los encabezados de la primera página y se
+    reutiliza en las páginas que continúan la tabla sin repetir encabezados.
+    """
+    try:
+        palabras = page.extract_words(use_text_flow=False, keep_blank_chars=False, x_tolerance=1.5, y_tolerance=3)
+    except Exception:
+        palabras = []
+    lineas = _agrupar_palabras_en_lineas(palabras)
+    if not lineas:
+        return [], layout_anterior, categoria_anterior
+
+    aliases = {
+        "nombre": {"elemento", "nombre", "articulo", "item", "descripcionarticulo"},
+        "referencia": {"referencia", "codigo", "codigobarras", "codigoactivo", "ref"},
+        "cantidad": {"cant", "cantidad", "cantidadsistema", "unidades", "existencia"},
+        "serial": {"serial", "serie"},
+        "marca": {"marca"},
+        "modelo": {"modelo"},
+        "observacion": {"observacion", "observaciones", "detalle"},
+        "categoria": {"categoria", "clase", "tipodeelemento"},
+        "estado": {"estado", "estadodelactivo"},
+        "estado_b": {"b"}, "estado_r": {"r"}, "estado_m": {"m"},
+    }
+    layout = layout_anterior
+    encabezado_bottom = -1.0
+    for linea in lineas[:80]:
+        encontrados = {}
+        for palabra in linea["palabras"]:
+            clave = _normalizar(palabra.get("text", ""))
+            for campo, opciones in aliases.items():
+                if clave in opciones:
+                    encontrados[campo] = (float(palabra.get("x0", 0)) + float(palabra.get("x1", 0))) / 2
+        if "nombre" in encontrados and "cantidad" in encontrados:
+            layout = {campo: centro / max(float(page.width), 1.0) for campo, centro in encontrados.items()}
+            encabezado_bottom = max(float(p.get("bottom", p.get("top", 0))) for p in linea["palabras"])
+            break
+
+    if not layout or "nombre" not in layout or "cantidad" not in layout:
+        return [], layout, categoria_anterior
+
+    columnas = sorted((float(posicion), campo) for campo, posicion in layout.items())
+    limites = [(columnas[i][0] + columnas[i + 1][0]) / 2 for i in range(len(columnas) - 1)]
+
+    def campo_de_palabra(palabra):
+        centro = ((float(palabra.get("x0", 0)) + float(palabra.get("x1", 0))) / 2) / max(float(page.width), 1.0)
+        for indice, limite in enumerate(limites):
+            if centro < limite:
+                return columnas[indice][1]
+        return columnas[-1][1]
+
+    filas_texto = []
+    for linea in lineas:
+        if linea["top"] <= encabezado_bottom + 1:
+            continue
+        celdas = {campo: [] for _, campo in columnas}
+        for palabra in linea["palabras"]:
+            campo = campo_de_palabra(palabra)
+            celdas.setdefault(campo, []).append(str(palabra.get("text", "")).strip())
+        texto = {campo: re.sub(r"\s+", " ", " ".join(partes)).strip() for campo, partes in celdas.items()}
+        nombre = texto.get("nombre", "")
+        cantidad = _parsear_cantidad(texto.get("cantidad", ""))
+        nombre_norm = _normalizar(nombre)
+        if not nombre or cantidad <= 0 or nombre_norm in {
+            "elemento", "nombre", "articulo", "item", "observaciones", "observacion",
+            "total", "subtotal", "b", "r", "m", "pagina", "pag",
+        }:
+            continue
+
+        estado = texto.get("estado", "").strip()
+        if not estado:
+            if any(_normalizar(x) == "x" for x in celdas.get("estado_m", [])):
+                estado = "Malo"
+            elif any(_normalizar(x) == "x" for x in celdas.get("estado_r", [])):
+                estado = "Regular"
+            else:
+                estado = "Bueno"
+        categoria = texto.get("categoria", "").strip()
+        if categoria:
+            categoria_anterior = categoria
+        elif categoria_anterior:
+            categoria = categoria_anterior
+
+        filas_texto.append({
+            "nombre": re.sub(r"\s+", " ", nombre).strip(),
+            "referencia": texto.get("referencia", ""),
+            "serial": texto.get("serial", ""),
+            "cantidad": cantidad,
+            "categoria": categoria,
+            "estado": estado,
+            "observacion": texto.get("observacion", ""),
+            "marca": texto.get("marca", ""),
+            "modelo": texto.get("modelo", ""),
+            "pagina_pdf": numero_pagina,
+        })
+    return filas_texto, layout, categoria_anterior
+
+
 def _filas_pdf(contenido):
     """Extrae el inventario de todas las páginas del PDF.
 
@@ -159,6 +276,7 @@ def _filas_pdf(contenido):
     paginas_sin_tabla_detectable = []
     paginas_sin_encabezado = []
     paginas_escaneadas = []
+    layout_texto_heredado = None
 
     def detectar_encabezado(matriz):
         for idx, row in enumerate(matriz[:15]):
@@ -225,8 +343,8 @@ def _filas_pdf(contenido):
     with pdfplumber.open(BytesIO(contenido)) as pdf:
         for numero_pagina, page in enumerate(pdf.pages, start=1):
             tablas = obtener_tablas(page)
+            texto_pagina = (page.extract_text() or "").strip()
             if not tablas:
-                texto_pagina = (page.extract_text() or "").strip()
                 if not texto_pagina and getattr(page, "images", []):
                     paginas_escaneadas.append(numero_pagina)
                 elif texto_pagina:
@@ -235,10 +353,10 @@ def _filas_pdf(contenido):
                         any(x in texto_norm for x in ("elemento", "articulo", "item"))
                         and any(x in texto_norm for x in ("cant", "cantidad", "unidades"))
                     )
-                    if parece_tabla:
+                    if parece_tabla and not layout_texto_heredado:
                         paginas_sin_tabla_detectable.append(numero_pagina)
-                continue
 
+            filas_tabla_pagina = []
             filas_pagina = 0
             for tabla in tablas:
                 try:
@@ -336,7 +454,7 @@ def _filas_pdf(contenido):
                     elif categoria_heredada:
                         categoria = categoria_heredada
 
-                    filas.append({
+                    filas_tabla_pagina.append({
                         "nombre": re.sub(r"\s+", " ", nombre).strip(),
                         "referencia": valor_columna("referencia"),
                         "serial": valor_columna("serial"),
@@ -350,8 +468,29 @@ def _filas_pdf(contenido):
                     })
                     filas_pagina += 1
 
-            if filas_pagina == 0 and tablas and not columnas_heredadas:
+            filas_texto_pagina, layout_texto_heredado, categoria_texto_heredada = _filas_pdf_por_columnas_de_texto(
+                page, layout_texto_heredado, categoria_heredada, numero_pagina
+            )
+            if categoria_texto_heredada:
+                categoria_heredada = categoria_texto_heredada
+
+            # PDFPlumber a veces detecta la tabla pero omite renglones que no
+            # coinciden con las líneas/bordes. Comparamos ambas extracciones y
+            # usamos la que recupera más filas válidas de esta misma página.
+            filas_elegidas = filas_texto_pagina if len(filas_texto_pagina) > len(filas_tabla_pagina) else filas_tabla_pagina
+            filas.extend(filas_elegidas)
+            if filas_elegidas:
+                paginas_sin_tabla_detectable = [p for p in paginas_sin_tabla_detectable if p != numero_pagina]
+                paginas_sin_encabezado = [p for p in paginas_sin_encabezado if p != numero_pagina]
+
+            if filas_pagina == 0 and tablas and not columnas_heredadas and not filas_texto_pagina and not filas_tabla_pagina:
                 paginas_sin_encabezado.append(numero_pagina)
+            if not filas_elegidas and layout_texto_heredado and texto_pagina:
+                # Página de continuación con texto, pero sin filas interpretables:
+                # no se omite silenciosamente como si estuviera vacía.
+                texto_norm = _normalizar(texto_pagina)
+                if re.search(r"\b\d+\b", texto_pagina) and any(palabra in texto_norm for palabra in ("aro", "pila", "mesa", "silla", "elemento", "articulo", "inventario", "tec")):
+                    paginas_sin_tabla_detectable.append(numero_pagina)
 
     paginas_problematicas = sorted(set(
         paginas_sin_tabla_detectable + paginas_sin_encabezado + paginas_escaneadas
@@ -454,8 +593,10 @@ def docente(token: str, request: Request, db: Session = Depends(get_db)):
     # Fijamos el tenant antes de consultar categorías para mantener aislamiento.
     db.info["empresa_id"] = lev.empresa_id
     categorias = CategoriaService(db).listar(estado="Activas")
+    detalles_publicos = [d for d in lev.detalles if not getattr(d, "alta_logistica", False)]
     return templates.TemplateResponse(request=request, name="activos/inventario_fisico_publico.html", context={
-        "title": "Verificación de inventario", "levantamiento": lev, "categorias": categorias, "token": token
+        "title": "Verificación de inventario", "levantamiento": lev, "categorias": categorias,
+        "token": token, "grupos_detalles": _agrupar_detalles_vista(detalles_publicos),
     })
 
 
@@ -467,6 +608,30 @@ def docente_actualizar(token: str, detalle_id: int, cantidad_encontrada: int = F
     db.info["empresa_id"] = lev.empresa_id
     try:
         LevantamientoService(db).actualizar_detalle_publico(token, detalle_id, cantidad_encontrada, estado_fisico, observacion)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return RedirectResponse(url=f"/inventario-fisico-publico/{token}", status_code=303)
+
+
+
+@public_router.post("/{token}/grupo")
+def docente_actualizar_grupo(
+    token: str,
+    detalle_ids_csv: str = Form(...),
+    cantidad_encontrada: int = Form(...),
+    estado_fisico: str = Form("Bueno"),
+    observacion: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    service = LevantamientoService(db)
+    lev = service.obtener_por_token(token)
+    if not lev:
+        raise HTTPException(status_code=404, detail="Enlace de inventario no encontrado.")
+    db.info["empresa_id"] = lev.empresa_id
+    try:
+        service.actualizar_grupo_publico(
+            token, detalle_ids_csv.split(","), cantidad_encontrada, estado_fisico, observacion
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return RedirectResponse(url=f"/inventario-fisico-publico/{token}", status_code=303)
@@ -562,6 +727,28 @@ def agregar_detalle(
 ):
     try:
         LevantamientoService(db).agregar_hallazgo(levantamiento_id, nombre, categoria_id, cantidad, estado_fisico, observacion, referencia, marca, modelo, serial)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return RedirectResponse(url=f"/activos/inventario-fisico/?levantamiento_id={levantamiento_id}", status_code=303)
+
+
+
+@router.post("/{levantamiento_id}/grupo/actualizar")
+def actualizar_grupo_borrador(
+    levantamiento_id: int,
+    detalle_ids_csv: str = Form(...),
+    cantidad_encontrada: int = Form(...),
+    estado_fisico: str = Form("Bueno"),
+    observacion: str = Form(""),
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(get_current_user),
+):
+    area = "Todas" if user.rol and user.rol.nombre in SUPER_ADMIN_ROLES else user_area(user)
+    try:
+        LevantamientoService(db).actualizar_grupo(
+            levantamiento_id, detalle_ids_csv.split(","), cantidad_encontrada,
+            estado_fisico, observacion, area=area,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return RedirectResponse(url=f"/activos/inventario-fisico/?levantamiento_id={levantamiento_id}", status_code=303)

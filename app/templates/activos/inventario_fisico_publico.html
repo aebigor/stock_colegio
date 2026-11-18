@@ -37,15 +37,18 @@
       <table class="physical-table public-table">
         <thead><tr><th>Elemento</th><th>Referencia</th><th>Sistema</th><th>Encontrado</th><th>Estado físico</th><th>Observación</th><th>Logística</th></tr></thead>
         <tbody>
-        {% for d in levantamiento.detalles if not d.alta_logistica %}
+        {% for g in grupos_detalles %}
+          {% set form_id = 'public-grupo-' ~ loop.index %}
           <tr>
-            <td><strong>{{ d.nombre }}</strong>{% if d.es_nuevo and d.cantidad_encontrada > 1 and not d.serial and not d.referencia %}<br><small class="existing-badge">{{ d.cantidad_encontrada }} unidades agrupadas</small>{% endif %}{% if d.categoria %}<br><small>{{ d.categoria.nombre }}</small>{% endif %}{% if d.es_nuevo %}<br><span class="new-badge">Hallazgo nuevo</span>{% endif %}</td>
-            <td>{{ d.referencia or '—' }}</td>
-            <td>{{ d.cantidad_sistema }}</td>
-            <td>{% if levantamiento.estado == 'Borrador' %}<input form="detalle-{{ d.id }}" type="number" name="cantidad_encontrada" min="0" value="{{ d.cantidad_encontrada }}" style="width:90px">{% else %}{{ d.cantidad_encontrada }}{% endif %}</td>
-            <td>{% if levantamiento.estado == 'Borrador' %}<select form="detalle-{{ d.id }}" name="estado_fisico">{% for estado in ['Bueno','Regular','Malo','No encontrado','Mantenimiento'] %}<option {% if d.estado_fisico == estado %}selected{% endif %}>{{ estado }}</option>{% endfor %}</select>{% else %}{{ d.estado_fisico }}{% endif %}</td>
-            <td>{% if levantamiento.estado == 'Borrador' %}<textarea form="detalle-{{ d.id }}" name="observacion" rows="2" placeholder="Escribe la novedad o condición">{{ d.observacion or '' }}</textarea><form id="detalle-{{ d.id }}" method="post" action="/inventario-fisico-publico/{{ token }}/detalle/{{ d.id }}"><button class="btn btn-sm btn-outline-primary mt-1"><i class="bi bi-save"></i> Guardar</button></form>{% else %}{{ d.observacion or '—' }}{% endif %}</td>
-            <td>{% if d.verificado_logistica %}<span class="status status-aprobado">Verificado</span>{% else %}Pendiente{% endif %}</td>
+            <td data-label="Elemento"><strong>{{ g.nombre }}</strong><br><small class="existing-badge">{{ g.cantidad_sistema if g.cantidad_sistema else g.cantidad_encontrada }} unidad(es) agrupadas</small>{% if g.categoria %}<br><small>{{ g.categoria.nombre }}</small>{% endif %}{% if g.es_nuevo %}<br><span class="new-badge">Hallazgo nuevo</span>{% endif %}</td>
+            <td data-label="Referencia">{{ g.referencia_rango }}</td>
+            <td data-label="Sistema">{{ g.cantidad_sistema }}</td>
+            <td data-label="Encontrado">{% if levantamiento.estado == 'Borrador' %}<input form="{{ form_id }}" type="number" name="cantidad_encontrada" min="0" max="100000" value="{{ g.cantidad_encontrada }}" style="width:90px" inputmode="numeric">{% else %}{{ g.cantidad_encontrada }}{% endif %}</td>
+            <td data-label="Estado físico">{% if levantamiento.estado == 'Borrador' %}<select form="{{ form_id }}" name="estado_fisico">{% for estado in ['Bueno','Regular','Malo','No encontrado','Mantenimiento'] %}<option {% if g.estado_fisico == estado %}selected{% endif %}>{{ estado }}</option>{% endfor %}</select>{% else %}{{ g.estado_fisico }}{% endif %}</td>
+            <td data-label="Observación">{% if levantamiento.estado == 'Borrador' %}<textarea form="{{ form_id }}" name="observacion" rows="2" placeholder="Escribe la novedad o condición">{{ g.observacion or '' }}</textarea>{% else %}{{ g.observacion or '—' }}{% endif %}</td>
+            <td data-label="Logística">{% if g.todos_verificados %}<span class="status status-aprobado">Verificado</span>{% else %}Pendiente{% endif %}
+              {% if levantamiento.estado == 'Borrador' %}<form id="{{ form_id }}" method="post" action="/inventario-fisico-publico/{{ token }}/grupo"><input type="hidden" name="detalle_ids_csv" value="{{ g.ids }}"></form><button form="{{ form_id }}" type="submit" class="btn btn-sm btn-outline-primary mt-1">Guardar grupo</button>{% endif %}
+            </td>
           </tr>
         {% else %}<tr><td colspan="7" class="empty">No hay elementos registrados.</td></tr>{% endfor %}
         </tbody>

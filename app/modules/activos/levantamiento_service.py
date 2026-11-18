@@ -466,6 +466,72 @@ class LevantamientoService:
         return len(creados_previos)
 
 
+    def _actualizar_grupo_detalles(self, lev, detalle_ids, cantidad_encontrada, estado_fisico, observacion):
+        if not lev or lev.estado != "Borrador":
+            raise ValueError("Este levantamiento ya está cerrado para edición.")
+        try:
+            ids = {int(x) for x in detalle_ids if str(x).strip()}
+            cantidad = int(cantidad_encontrada)
+        except (TypeError, ValueError):
+            raise ValueError("La cantidad o los elementos seleccionados no son válidos.")
+        if not ids:
+            raise ValueError("No se seleccionaron artículos para actualizar.")
+        if cantidad < 0 or cantidad > 100000:
+            raise ValueError("La cantidad encontrada debe estar entre 0 y 100000.")
+        detalles = [d for d in lev.detalles if d.id in ids and not getattr(d, "alta_logistica", False)]
+        if len(detalles) != len(ids):
+            raise ValueError("Uno o más artículos no pertenecen a este levantamiento.")
+
+        total_sistema = sum(max(0, int(d.cantidad_sistema or 0)) for d in detalles)
+        if total_sistema and cantidad > total_sistema:
+            raise ValueError(
+                f"La cantidad encontrada ({cantidad}) supera las unidades del sistema ({total_sistema}). "
+                "Registra las unidades adicionales mediante 'Agregar hallazgo' para que queden identificadas como nuevas."
+            )
+
+        if total_sistema:
+            restante = cantidad
+            for detalle in sorted(detalles, key=lambda d: d.id):
+                capacidad = max(0, int(detalle.cantidad_sistema or 0))
+                asignadas = min(capacidad, restante)
+                detalle.cantidad_encontrada = asignadas
+                restante -= asignadas
+        elif len(detalles) == 1:
+            detalles[0].cantidad_encontrada = cantidad
+        else:
+            # En grupos de hallazgos (sin cantidad de sistema), se distribuye
+            # primero según las cantidades originales y el excedente queda en
+            # el primer detalle para conservar la suma agrupada sin duplicar filas.
+            restantes_detalles = sorted(detalles, key=lambda d: d.id)
+            restante = cantidad
+            capacidades = [max(0, int(d.cantidad_encontrada or 0)) for d in restantes_detalles]
+            for detalle, capacidad in zip(restantes_detalles, capacidades):
+                asignadas = min(capacidad, restante)
+                detalle.cantidad_encontrada = asignadas
+                restante -= asignadas
+            if restante:
+                restantes_detalles[0].cantidad_encontrada += restante
+
+        estado = (estado_fisico or "Bueno").strip() or "Bueno"
+        nota = (observacion or "").strip() or None
+        for detalle in detalles:
+            detalle.estado_fisico = estado
+            detalle.observacion = nota
+        self.db.commit()
+        return detalles
+
+    def actualizar_grupo(self, levantamiento_id, detalle_ids, cantidad_encontrada, estado_fisico, observacion, area="Todas"):
+        lev = self.obtener(levantamiento_id, area)
+        if not lev:
+            raise ValueError("El levantamiento no existe o no pertenece a tu área.")
+        return self._actualizar_grupo_detalles(lev, detalle_ids, cantidad_encontrada, estado_fisico, observacion)
+
+    def actualizar_grupo_publico(self, token, detalle_ids, cantidad_encontrada, estado_fisico, observacion):
+        lev = self.obtener_por_token(token)
+        if not lev:
+            raise ValueError("Enlace de inventario no encontrado.")
+        return self._actualizar_grupo_detalles(lev, detalle_ids, cantidad_encontrada, estado_fisico, observacion)
+
     def actualizar_detalle(self, detalle_id, cantidad_encontrada, estado_fisico, observacion):
         d = self.db.query(LevantamientoDetalle).join(LevantamientoInventario).filter(LevantamientoDetalle.id == detalle_id).first()
         if not d or d.levantamiento.estado != "Borrador":
