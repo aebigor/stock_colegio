@@ -17,10 +17,6 @@ def cantidad_entregada_detalle(detalle):
     Un detalle de activo existente representa como máximo una unidad; un hallazgo
     nuevo puede representar varias unidades registradas en cantidad_encontrada.
     """
-    # Las altas capturadas por Logística no se entregan al docente y, por tanto,
-    # nunca deben entrar en el cálculo de préstamos/devoluciones del levantamiento.
-    if getattr(detalle, "alta_logistica", False):
-        return 0
     cantidad = max(0, int(detalle.cantidad_encontrada or 0))
     if detalle.es_nuevo:
         return cantidad
@@ -52,12 +48,6 @@ def calcular_diferencias_cantidad(entregadas, cantidad_actual):
 
 def cantidad_total_encontrada_devolucion(detalle):
     return cantidad_devuelta_detalle(detalle) + cantidad_sobrante_detalle(detalle)
-
-
-def estado_inventario_para_alta(estado_fisico):
-    """Mapea la condición física del artículo nuevo al estado del inventario."""
-    estado = (estado_fisico or "Bueno").strip().casefold()
-    return "Mantenimiento" if estado in {"malo", "mantenimiento"} else "Disponible"
 
 
 def _normalizar_grupo_detalle(detalle):
@@ -284,189 +274,6 @@ class LevantamientoService:
         self.db.refresh(detalle)
         return detalle
 
-    def agregar_alta_logistica(
-        self, levantamiento_id, usuario_nombre, nombre, categoria_id, cantidad,
-        estado_fisico="Bueno", referencia="", marca="", modelo="", serial="",
-        descripcion="", observacion="",
-    ):
-        """Agrega artículos recién ingresados desde la revisión de Logística.
-
-        Durante la aprobación quedan en espera hasta que Logística apruebe.
-        Durante la devolución de un levantamiento ya aprobado se crean inmediatamente
-        como activos disponibles en la bodega revisada.
-        """
-        lev = self.db.query(LevantamientoInventario).filter(
-            LevantamientoInventario.id == levantamiento_id
-        ).first()
-        if not lev or lev.estado not in {"Pendiente de aprobación", "Aprobado", "Devuelto parcialmente"}:
-            raise ValueError("Solo puedes agregar artículos mientras Logística revisa o recibe un levantamiento no finalizado.")
-
-        nombre = (nombre or "").strip()
-        if not nombre:
-            raise ValueError("El nombre del artículo es obligatorio.")
-        if len(nombre) > 150:
-            raise ValueError("El nombre no puede superar 150 caracteres.")
-        cantidad = int(cantidad or 0)
-        if cantidad < 1 or cantidad > 500:
-            raise ValueError("La cantidad debe estar entre 1 y 500.")
-
-        referencia = (referencia or "").strip()
-        marca = (marca or "").strip()
-        modelo = (modelo or "").strip()
-        serial = (serial or "").strip()
-        descripcion = (descripcion or "").strip()
-        observacion = (observacion or "").strip()
-        estado_fisico = (estado_fisico or "Bueno").strip()
-        if serial and cantidad > 1:
-            raise ValueError("Si registras un serial individual, la cantidad debe ser 1. Para varios artículos, registra cada serial por separado.")
-
-        categoria = self.db.query(Categoria).filter(
-            Categoria.id == categoria_id,
-            Categoria.activo.is_(True),
-            Categoria.empresa_id == lev.empresa_id,
-        ).first()
-        if not categoria:
-            raise ValueError("La categoría seleccionada no pertenece a esta empresa o está inactiva.")
-
-        # Evita duplicar la misma línea si el usuario reenvía el formulario.
-        repetido = self.db.query(LevantamientoDetalle).filter(
-            LevantamientoDetalle.empresa_id == lev.empresa_id,
-            LevantamientoDetalle.levantamiento_id == lev.id,
-            LevantamientoDetalle.alta_logistica.is_(True),
-            LevantamientoDetalle.categoria_id == categoria.id,
-            LevantamientoDetalle.nombre == nombre,
-            LevantamientoDetalle.marca == (marca or None),
-            LevantamientoDetalle.modelo == (modelo or None),
-            LevantamientoDetalle.serial == (serial or None),
-            LevantamientoDetalle.referencia == (referencia or None),
-            LevantamientoDetalle.cantidad_encontrada == cantidad,
-        ).first()
-        if repetido:
-            raise ValueError("Este mismo artículo ya fue agregado a la revisión. Cambia la marca, referencia o cantidad si es otro registro.")
-
-        detalle = LevantamientoDetalle(
-            empresa_id=lev.empresa_id,
-            levantamiento_id=lev.id,
-            activo_id=None,
-            categoria_id=categoria.id,
-            nombre=nombre,
-            referencia=referencia or None,
-            serial=serial or None,
-            marca=marca or None,
-            modelo=modelo or None,
-            descripcion=descripcion or None,
-            cantidad_sistema=0,
-            cantidad_encontrada=cantidad,
-            estado_fisico=estado_fisico,
-            observacion=observacion or None,
-            es_nuevo=True,
-            alta_logistica=True,
-            verificado_logistica=True,
-            revisado_por=usuario_nombre,
-            revisado_at=datetime.now(timezone.utc),
-        )
-        self.db.add(detalle)
-        self.db.flush()
-
-        # Si el docente ya recibió el inventario y Logística está registrando
-        # su devolución, el alta no puede esperar a una aprobación que ya ocurrió:
-        # se incorpora de inmediato a la bodega y queda auditada en movimientos.
-        if lev.estado in {"Aprobado", "Devuelto parcialmente"}:
-            self._crear_activos_alta_logistica(lev, detalle, usuario_nombre)
-
-        self.db.commit()
-        self.db.refresh(detalle)
-        return detalle
-
-    def _crear_activos_alta_logistica(self, lev, detalle, usuario_nombre):
-        """Incorpora una línea de alta logística al inventario maestro una sola vez."""
-        categoria = self.db.query(Categoria).filter(
-            Categoria.id == detalle.categoria_id,
-            Categoria.empresa_id == lev.empresa_id,
-            Categoria.activo.is_(True),
-        ).first()
-        if not categoria:
-            raise ValueError(f"El artículo nuevo '{detalle.nombre}' no tiene una categoría válida de esta empresa.")
-
-        marcador = f"alta_logistica_levantamiento={lev.id}_detalle={detalle.id}"
-        movimientos_previos = self.db.query(Movimiento).filter(
-            Movimiento.empresa_id == lev.empresa_id,
-            Movimiento.tipo == "Alta nuevo artículo",
-            Movimiento.observaciones.ilike(f"%{marcador}%"),
-        ).all()
-        creados_previos = {m.activo_id for m in movimientos_previos if m.activo_id}
-        if len(creados_previos) > int(detalle.cantidad_encontrada or 0):
-            raise ValueError(f"El artículo '{detalle.nombre}' ya tiene más unidades creadas que las registradas.")
-
-        prefijo = (categoria.prefijo or "ACT").strip().upper()[:10] or "ACT"
-        ultimo = self.db.query(Activo.id).order_by(Activo.id.desc()).first()
-        siguiente = (ultimo[0] if ultimo else 0) + 1
-        restantes = int(detalle.cantidad_encontrada or 0) - len(creados_previos)
-        estado_nuevo = estado_inventario_para_alta(detalle.estado_fisico)
-        for unidad in range(restantes):
-            while True:
-                codigo = f"{prefijo}{siguiente:06d}"
-                codigo_barras = f"TEC-GLS-{siguiente:06d}"
-                existe = self.db.query(Activo.id).filter(
-                    Activo.empresa_id == lev.empresa_id,
-                    (Activo.codigo == codigo) | (Activo.codigo_barras == codigo_barras),
-                ).first()
-                if not existe:
-                    break
-                siguiente += 1
-
-            descripcion_partes = []
-            if (detalle.descripcion or "").strip():
-                descripcion_partes.append(detalle.descripcion.strip())
-            if (detalle.referencia or "").strip():
-                descripcion_partes.append(f"Referencia de fabricante/proveedor: {detalle.referencia.strip()}")
-            if (detalle.observacion or "").strip():
-                descripcion_partes.append(f"Observación de ingreso: {detalle.observacion.strip()}")
-            activo_nuevo = Activo(
-                empresa_id=lev.empresa_id,
-                codigo=codigo,
-                codigo_barras=codigo_barras,
-                serial=detalle.serial if int(detalle.cantidad_encontrada or 0) == 1 else None,
-                nombre=detalle.nombre,
-                descripcion="\n".join(descripcion_partes) or None,
-                categoria_id=categoria.id,
-                ubicacion_id=lev.ubicacion_id,
-                marca=detalle.marca,
-                modelo=detalle.modelo,
-                estado=estado_nuevo,
-                responsable_id=None,
-                tenedor_id=None,
-                qr=codigo_barras,
-                observaciones=(detalle.observacion or "").strip() or None,
-                area=lev.area,
-                activo=True,
-            )
-            self.db.add(activo_nuevo)
-            self.db.flush()
-            self.db.add(Movimiento(
-                empresa_id=lev.empresa_id,
-                activo_id=activo_nuevo.id,
-                persona_id=None,
-                ubicacion_id=lev.ubicacion_id,
-                ubicacion_origen_id=lev.ubicacion_id,
-                tipo="Alta nuevo artículo",
-                estado=estado_nuevo,
-                estado_entrega="Ingreso nuevo a inventario durante la recepción del levantamiento físico",
-                observaciones=(
-                    f"{marcador}; unidad={len(creados_previos) + unidad + 1}; "
-                    f"cantidad_registrada={detalle.cantidad_encontrada}; levantamiento={lev.id}; detalle_fisico_id={detalle.id}. "
-                    + (f"Referencia: {detalle.referencia}. " if detalle.referencia else "")
-                    + (f"Descripción: {detalle.descripcion}. " if detalle.descripcion else "")
-                    + (f"Observación: {detalle.observacion}. " if detalle.observacion else "")
-                    + f"Estado físico: {detalle.estado_fisico}. Registrado por {usuario_nombre}."
-                ),
-                usuario=usuario_nombre,
-                area=lev.area,
-            ))
-            creados_previos.add(activo_nuevo.id)
-            siguiente += 1
-        return len(creados_previos)
-
     def actualizar_detalle(self, detalle_id, cantidad_encontrada, estado_fisico, observacion):
         d = self.db.query(LevantamientoDetalle).join(LevantamientoInventario).filter(LevantamientoDetalle.id == detalle_id).first()
         if not d or d.levantamiento.estado != "Borrador":
@@ -508,6 +315,37 @@ class LevantamientoService:
         lev.estado = "Pendiente de aprobación"
         lev.enviado_at = datetime.now(timezone.utc)
         self.db.commit()
+
+    def devolver_a_docente(self, levantamiento_id):
+        """Reabre un levantamiento enviado para que el docente complete/corrija.
+
+        Solo actúa sobre "Pendiente de aprobación": Logística todavía no ha
+        aprobado ni convertido el levantamiento en entrega. Conserva todos los
+        detalles, cantidades, hallazgos y observaciones que ya diligenció el docente.
+        La firma anterior se invalida para exigir una nueva firma al reenviar.
+        """
+        lev = self.db.query(LevantamientoInventario).options(
+            joinedload(LevantamientoInventario.detalles)
+        ).filter(LevantamientoInventario.id == levantamiento_id).first()
+        if not lev:
+            raise ValueError("Levantamiento no encontrado.")
+        if lev.estado != "Pendiente de aprobación":
+            raise ValueError(
+                "Solo puedes devolver al docente un levantamiento enviado que aún no haya sido aprobado por Logística."
+            )
+
+        lev.estado = "Borrador"
+        lev.firma = None
+        lev.enviado_at = None
+        lev.aprobado_por = None
+        lev.aprobado_at = None
+        for detalle in lev.detalles:
+            detalle.verificado_logistica = False
+            detalle.revisado_por = None
+            detalle.revisado_at = None
+
+        self.db.commit()
+        return lev
 
     def aprobar(self, levantamiento_id, usuario_id, usuario_nombre):
         lev = self.db.query(LevantamientoInventario).options(
@@ -572,96 +410,6 @@ class LevantamientoService:
                     protocolo_aceptado=False,
                 ))
                 entregados += 1
-                continue
-
-            if d.es_nuevo and getattr(d, "alta_logistica", False) and d.cantidad_encontrada > 0 and d.activo_id is None:
-                categoria = self.db.query(Categoria).filter(
-                    Categoria.id == d.categoria_id,
-                    Categoria.empresa_id == lev.empresa_id,
-                    Categoria.activo.is_(True),
-                ).first()
-                if not categoria:
-                    raise ValueError(f"El artículo nuevo '{d.nombre}' no tiene una categoría válida de esta empresa.")
-
-                marcador = f"alta_logistica_levantamiento={lev.id}_detalle={d.id}"
-                movimientos_previos = self.db.query(Movimiento).filter(
-                    Movimiento.empresa_id == lev.empresa_id,
-                    Movimiento.tipo == "Alta nuevo artículo",
-                    Movimiento.observaciones.ilike(f"%{marcador}%"),
-                ).all()
-                creados_previos = {m.activo_id for m in movimientos_previos if m.activo_id}
-                if len(creados_previos) > int(d.cantidad_encontrada or 0):
-                    raise ValueError(f"El artículo '{d.nombre}' ya tiene más unidades creadas que las registradas.")
-
-                prefijo = (categoria.prefijo or "ACT").strip().upper()[:10] or "ACT"
-                ultimo = self.db.query(Activo.id).order_by(Activo.id.desc()).first()
-                siguiente = (ultimo[0] if ultimo else 0) + 1
-                restantes = int(d.cantidad_encontrada or 0) - len(creados_previos)
-                estado_nuevo = estado_inventario_para_alta(d.estado_fisico)
-                for unidad in range(restantes):
-                    while True:
-                        codigo = f"{prefijo}{siguiente:06d}"
-                        codigo_barras = f"TEC-GLS-{siguiente:06d}"
-                        existe = self.db.query(Activo.id).filter(
-                            Activo.empresa_id == lev.empresa_id,
-                            (Activo.codigo == codigo) | (Activo.codigo_barras == codigo_barras),
-                        ).first()
-                        if not existe:
-                            break
-                        siguiente += 1
-
-                    descripcion_partes = []
-                    if (d.descripcion or "").strip():
-                        descripcion_partes.append(d.descripcion.strip())
-                    if (d.referencia or "").strip():
-                        descripcion_partes.append(f"Referencia de fabricante/proveedor: {d.referencia.strip()}")
-                    if (d.observacion or "").strip():
-                        descripcion_partes.append(f"Observación de ingreso: {d.observacion.strip()}")
-                    activo_nuevo = Activo(
-                        empresa_id=lev.empresa_id,
-                        codigo=codigo,
-                        codigo_barras=codigo_barras,
-                        serial=d.serial if int(d.cantidad_encontrada or 0) == 1 else None,
-                        nombre=d.nombre,
-                        descripcion="\n".join(descripcion_partes) or None,
-                        categoria_id=categoria.id,
-                        ubicacion_id=lev.ubicacion_id,
-                        marca=d.marca,
-                        modelo=d.modelo,
-                        estado=estado_nuevo,
-                        responsable_id=None,
-                        tenedor_id=None,
-                        qr=codigo_barras,
-                        observaciones=(d.observacion or "").strip() or None,
-                        area=lev.area,
-                        activo=True,
-                    )
-                    self.db.add(activo_nuevo)
-                    self.db.flush()
-                    self.db.add(Movimiento(
-                        empresa_id=lev.empresa_id,
-                        activo_id=activo_nuevo.id,
-                        persona_id=None,
-                        ubicacion_id=lev.ubicacion_id,
-                        ubicacion_origen_id=lev.ubicacion_id,
-                        tipo="Alta nuevo artículo",
-                        estado=estado_nuevo,
-                        estado_entrega="Ingreso nuevo a inventario desde revisión logística",
-                        observaciones=(
-                            f"{marcador}; unidad={len(creados_previos) + unidad + 1}; "
-                            f"cantidad_registrada={d.cantidad_encontrada}; "
-                            f"levantamiento={lev.id}; detalle_fisico_id={d.id}. "
-                            + (f"Referencia: {d.referencia}. " if d.referencia else "")
-                            + (f"Descripción: {d.descripcion}. " if d.descripcion else "")
-                            + (f"Observación: {d.observacion}. " if d.observacion else "")
-                            + f"Estado físico: {d.estado_fisico}. Registrado y aprobado por {usuario_nombre}."
-                        ),
-                        usuario=usuario_nombre,
-                        area=lev.area,
-                    ))
-                    creados += 1
-                    siguiente += 1
-                # Estas altas no se asignan al docente ni se incluyen en la devolución.
                 continue
 
             if d.es_nuevo and d.cantidad_encontrada > 0 and d.activo_id is None:
@@ -732,7 +480,7 @@ class LevantamientoService:
         if not lev.responsable_id:
             raise ValueError("El levantamiento no tiene responsable.")
 
-        pendientes_revision = [d for d in lev.detalles if not getattr(d, "alta_logistica", False) and not getattr(d, "revisado_devolucion", False)]
+        pendientes_revision = [d for d in lev.detalles if not getattr(d, "revisado_devolucion", False)]
         if pendientes_revision:
             raise ValueError(
                 "Debes guardar la cantidad y observación de todos los grupos antes de registrar la devolución. "
@@ -759,8 +507,6 @@ class LevantamientoService:
 
         resumen_grupos = {}
         for detalle in lev.detalles:
-            if getattr(detalle, "alta_logistica", False):
-                continue
             clave = _normalizar_grupo_detalle(detalle)
             resumen = resumen_grupos.setdefault(clave, {"entregadas": 0, "recibidas": 0, "sobrantes": 0, "observacion": None})
             resumen["entregadas"] += cantidad_entregada_detalle(detalle)

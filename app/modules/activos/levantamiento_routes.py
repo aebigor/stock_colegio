@@ -146,64 +146,146 @@ def _reconstruir_categoria_vertical(page, cell):
 
 
 def _filas_pdf(contenido):
-    """Extrae filas de inventarios PDF usando las columnas detectadas de la tabla.
+    """Extrae el inventario de todas las páginas del PDF.
 
-    No depende de coordenadas fijas: los formatos del colegio pueden variar
-    en tamaño, márgenes u orientación y seguir teniendo la misma estructura.
+    Conserva la estructura de columnas de la primera tabla que tenga encabezados,
+    para poder leer páginas de continuación que no repiten ELEMENTO/CANTIDAD.
+    Si detecta páginas con tabla/elementos que no pudo leer, falla explícitamente
+    y evita crear un levantamiento incompleto.
     """
     filas = []
+    columnas_heredadas = None
+    categoria_heredada = ""
+    paginas_sin_tabla_detectable = []
+    paginas_sin_encabezado = []
+    paginas_escaneadas = []
+
+    def detectar_encabezado(matriz):
+        for idx, row in enumerate(matriz[:15]):
+            encontrados = {}
+            for col_idx, valor in enumerate(row or []):
+                clave = _normalizar(valor)
+                if clave in {"elemento", "nombre", "articulo", "item", "descripcionarticulo"}:
+                    encontrados["nombre"] = col_idx
+                elif clave in {"cant", "cantidad", "cantidadsistema", "unidades"}:
+                    encontrados["cantidad"] = col_idx
+                elif clave in {"referencia", "codigo", "codigobarras", "codigoactivo"}:
+                    encontrados["referencia"] = col_idx
+                elif clave == "serial":
+                    encontrados["serial"] = col_idx
+                elif clave == "marca":
+                    encontrados["marca"] = col_idx
+                elif clave == "modelo":
+                    encontrados["modelo"] = col_idx
+                elif clave in {"observacion", "observaciones", "detalle"}:
+                    encontrados["observacion"] = col_idx
+                elif clave in {"categoria", "clase", "tipodeelemento"}:
+                    encontrados["categoria"] = col_idx
+                elif clave in {"estado", "estadodelactivo"}:
+                    encontrados["estado"] = col_idx
+            if "nombre" in encontrados and "cantidad" in encontrados:
+                return idx, encontrados
+        return None, None
+
+    def obtener_tablas(page):
+        """Usa primero la detección normal y después una estrategia por texto."""
+        try:
+            tablas = page.find_tables() or []
+        except Exception:
+            tablas = []
+        if tablas:
+            return tablas
+
+        estrategias = (
+            {
+                "vertical_strategy": "text",
+                "horizontal_strategy": "text",
+                "min_words_vertical": 2,
+                "min_words_horizontal": 1,
+                "text_tolerance": 3,
+                "intersection_tolerance": 5,
+            },
+            {
+                "vertical_strategy": "lines",
+                "horizontal_strategy": "text",
+                "min_words_horizontal": 1,
+                "text_tolerance": 3,
+                "intersection_tolerance": 5,
+            },
+        )
+        for configuracion in estrategias:
+            try:
+                tablas = page.find_tables(table_settings=configuracion) or []
+            except Exception:
+                tablas = []
+            if tablas:
+                return tablas
+        return []
+
     with pdfplumber.open(BytesIO(contenido)) as pdf:
-        for page in pdf.pages:
-            tablas = page.find_tables()
+        for numero_pagina, page in enumerate(pdf.pages, start=1):
+            tablas = obtener_tablas(page)
             if not tablas:
+                texto_pagina = (page.extract_text() or "").strip()
+                if not texto_pagina and getattr(page, "images", []):
+                    paginas_escaneadas.append(numero_pagina)
+                elif texto_pagina:
+                    texto_norm = _normalizar(texto_pagina)
+                    parece_tabla = (
+                        any(x in texto_norm for x in ("elemento", "articulo", "item"))
+                        and any(x in texto_norm for x in ("cant", "cantidad", "unidades"))
+                    )
+                    if parece_tabla:
+                        paginas_sin_tabla_detectable.append(numero_pagina)
                 continue
 
+            filas_pagina = 0
             for tabla in tablas:
-                matriz = tabla.extract() or []
-                encabezado_idx = None
-                columnas = {}
-                for idx, row in enumerate(matriz[:12]):
-                    encontrados = {}
-                    for col_idx, valor in enumerate(row):
-                        clave = _normalizar(valor)
-                        if clave in {"elemento", "nombre", "articulo", "item"}:
-                            encontrados["nombre"] = col_idx
-                        elif clave in {"cant", "cantidad", "cantidadsistema"}:
-                            encontrados["cantidad"] = col_idx
-                        elif clave in {"referencia", "codigo", "codigobarras"}:
-                            encontrados["referencia"] = col_idx
-                        elif clave in {"marca"}:
-                            encontrados["marca"] = col_idx
-                        elif clave in {"observacion", "observaciones"}:
-                            encontrados["observacion"] = col_idx
-                    if "nombre" in encontrados and "cantidad" in encontrados:
-                        encabezado_idx, columnas = idx, encontrados
-                        break
-
-                if encabezado_idx is None:
+                try:
+                    matriz = tabla.extract() or []
+                except Exception:
+                    matriz = []
+                if not matriz:
                     continue
 
-                # Categorías impresas verticalmente en la primera columna.
-                rangos_categoria = []
-                for cell in tabla.cells:
-                    if not cell:
-                        continue
-                    x0, top, x1, bottom = cell
-                    if x0 <= tabla.bbox[0] + 1 and (bottom - top) >= 25 and top > tabla.bbox[1] + 90:
-                        nombre_cat = _reconstruir_categoria_vertical(page, cell)
-                        if nombre_cat and len(_normalizar(nombre_cat)) >= 4:
-                            rangos_categoria.append((top, bottom, nombre_cat))
+                encabezado_idx, columnas_detectadas = detectar_encabezado(matriz)
+                if columnas_detectadas:
+                    columnas_heredadas = columnas_detectadas
+                    columnas = columnas_detectadas
+                    primera_fila = encabezado_idx + 1
+                elif columnas_heredadas:
+                    # Las páginas de continuación suelen omitir los encabezados.
+                    columnas = columnas_heredadas
+                    primera_fila = 0
+                else:
+                    paginas_sin_encabezado.append(numero_pagina)
+                    continue
 
-                for row_idx in range(encabezado_idx + 1, len(matriz)):
-                    row = matriz[row_idx]
-                    if not row:
-                        continue
+                rangos_categoria = []
+                try:
+                    for cell in (getattr(tabla, "cells", None) or []):
+                        if not cell:
+                            continue
+                        x0, top, x1, bottom = cell
+                        if x0 <= tabla.bbox[0] + 1 and (bottom - top) >= 25 and top > tabla.bbox[1] + 40:
+                            nombre_cat = _reconstruir_categoria_vertical(page, cell)
+                            if nombre_cat and len(_normalizar(nombre_cat)) >= 4:
+                                rangos_categoria.append((top, bottom, nombre_cat))
+                except (AttributeError, IndexError, TypeError, ValueError):
+                    rangos_categoria = []
+
+                for row_idx in range(primera_fila, len(matriz)):
+                    row = matriz[row_idx] or []
                     nombre_idx = columnas["nombre"]
                     cantidad_idx = columnas["cantidad"]
                     nombre = str(row[nombre_idx] or "").strip() if nombre_idx < len(row) else ""
                     if not nombre:
                         continue
-                    if _normalizar(nombre) in {"elemento", "observaciones", "observacion", "b", "r", "m"}:
+                    nombre_norm = _normalizar(nombre)
+                    if nombre_norm in {
+                        "elemento", "nombre", "articulo", "item", "observaciones",
+                        "observacion", "total", "subtotal", "b", "r", "m",
+                    }:
                         continue
 
                     cantidad_txt = row[cantidad_idx] if cantidad_idx < len(row) else ""
@@ -215,45 +297,83 @@ def _filas_pdf(contenido):
                         col = columnas.get(campo)
                         return str(row[col] or "").strip() if col is not None and col < len(row) else ""
 
-                    # Estado: X aparece en una de las columnas B/R/M, después de CANT.
-                    estado = "Bueno"
-                    try:
-                        celdas = tabla.rows[row_idx].cells
-                        if len(celdas) >= 8:
-                            for estado_idx, estado_nombre in ((5, "Bueno"), (6, "Regular"), (7, "Malo")):
-                                celda = celdas[estado_idx]
-                                if celda:
-                                    x0, top, x1, bottom = celda
-                                    marcas = [w for w in page.extract_words(use_text_flow=False, keep_blank_chars=False)
-                                              if x0 <= w["x0"] < x1 and top <= w["top"] < bottom
-                                              and w["text"].strip().upper() == "X"]
-                                    if marcas:
-                                        estado = estado_nombre
-                                        break
-                    except (IndexError, TypeError):
-                        pass
+                    estado = valor_columna("estado") or "Bueno"
+                    if not columnas.get("estado"):
+                        # Formato habitual del colegio: X en B/R/M después de CANT.
+                        try:
+                            celdas = tabla.rows[row_idx].cells
+                            if len(celdas) >= 8:
+                                for estado_idx, estado_nombre in ((5, "Bueno"), (6, "Regular"), (7, "Malo")):
+                                    celda = celdas[estado_idx]
+                                    if celda:
+                                        x0, top, x1, bottom = celda
+                                        marcas = [
+                                            w for w in page.extract_words(use_text_flow=False, keep_blank_chars=False)
+                                            if x0 <= w["x0"] < x1 and top <= w["top"] < bottom
+                                            and w["text"].strip().upper() == "X"
+                                        ]
+                                        if marcas:
+                                            estado = estado_nombre
+                                            break
+                        except (AttributeError, IndexError, TypeError, ValueError):
+                            pass
 
-                    categoria = ""
-                    try:
-                        celda_elemento = tabla.rows[row_idx].cells[nombre_idx]
-                        if celda_elemento:
-                            y = (celda_elemento[1] + celda_elemento[3]) / 2
-                            categoria = next((cat for top, bottom, cat in rangos_categoria
-                                              if top - 1 <= y <= bottom + 1), "")
-                    except (IndexError, TypeError):
-                        pass
+                    categoria = valor_columna("categoria")
+                    if not categoria:
+                        try:
+                            celdas = tabla.rows[row_idx].cells
+                            celda_elemento = celdas[nombre_idx] if nombre_idx < len(celdas) else None
+                            if celda_elemento:
+                                y = (celda_elemento[1] + celda_elemento[3]) / 2
+                                categoria = next(
+                                    (cat for top, bottom, cat in rangos_categoria if top - 1 <= y <= bottom + 1),
+                                    "",
+                                )
+                        except (AttributeError, IndexError, TypeError, ValueError):
+                            pass
+                    if categoria:
+                        categoria_heredada = categoria
+                    elif categoria_heredada:
+                        categoria = categoria_heredada
 
                     filas.append({
                         "nombre": re.sub(r"\s+", " ", nombre).strip(),
                         "referencia": valor_columna("referencia"),
+                        "serial": valor_columna("serial"),
                         "cantidad": cantidad,
                         "categoria": categoria,
                         "estado": estado,
                         "observacion": valor_columna("observacion"),
                         "marca": valor_columna("marca"),
+                        "modelo": valor_columna("modelo"),
+                        "pagina_pdf": numero_pagina,
                     })
-    return filas
+                    filas_pagina += 1
 
+            if filas_pagina == 0 and tablas and not columnas_heredadas:
+                paginas_sin_encabezado.append(numero_pagina)
+
+    paginas_problematicas = sorted(set(
+        paginas_sin_tabla_detectable + paginas_sin_encabezado + paginas_escaneadas
+    ))
+    if paginas_problematicas:
+        detalle = ", ".join(str(n) for n in paginas_problematicas)
+        causas = []
+        if paginas_escaneadas:
+            causas.append("contienen páginas escaneadas sin texto seleccionable")
+        if paginas_sin_tabla_detectable:
+            causas.append("tienen encabezados de inventario pero no se pudo detectar su tabla")
+        if paginas_sin_encabezado:
+            causas.append("no repiten encabezados y no fue posible heredar las columnas")
+        causa = "; ".join(causas) or "no se pudieron interpretar completamente"
+        raise ValueError(
+            f"No se importó el PDF para evitar una carga incompleta. Revisa las páginas {detalle}: {causa}. "
+            "Si son páginas escaneadas, se requiere un PDF con texto seleccionable u OCR."
+        )
+
+    if not filas:
+        raise ValueError("No se encontraron artículos con nombre y cantidad en ninguna página del PDF.")
+    return filas
 
 def _agrupar_detalles_vista(detalles):
     """Agrupa solo para presentar; conserva cada detalle/activo en la base de datos."""
@@ -267,8 +387,7 @@ def _agrupar_detalles_vista(detalles):
             key = (
                 _normalizar(d.nombre), d.categoria_id or 0,
                 _normalizar(d.marca), _normalizar(d.modelo),
-                bool(d.es_nuevo), bool(getattr(d, "alta_logistica", False)),
-                (d.estado_fisico or "").strip().casefold(),
+                bool(d.es_nuevo), (d.estado_fisico or "").strip().casefold(),
                 (d.observacion or "").strip().casefold(),
             )
         grupos.setdefault(key, []).append(d)
@@ -296,12 +415,7 @@ def _agrupar_detalles_vista(detalles):
             "referencia_rango": rango,
             "estado_fisico": primero.estado_fisico,
             "observacion": primero.observacion,
-            "marca": primero.marca,
-            "modelo": primero.modelo,
-            "serial": primero.serial,
             "es_nuevo": primero.es_nuevo,
-            "alta_logistica": bool(getattr(primero, "alta_logistica", False)),
-            "descripcion": getattr(primero, "descripcion", None),
             "cantidad": len(detalles_grupo),
             "cantidad_entregada": sum(cantidad_entregada_detalle(d) for d in detalles_grupo),
             "cantidad_devuelta": sum(cantidad_devuelta_detalle(d) for d in detalles_grupo),
@@ -317,11 +431,6 @@ def _agrupar_detalles_vista(detalles):
             "activo": primero.activo,
         })
     return sorted(resultado, key=lambda g: (str(g["nombre"] or "").casefold(), g["referencia_rango"]))
-
-
-def _agrupar_detalles_devolucion(detalles):
-    """Oculta las altas nuevas de Logística del checklist de devolución al docente."""
-    return [g for g in _agrupar_detalles_vista(detalles) if not g.get("alta_logistica")]
 
 
 def _es_logistica(user: Usuario) -> bool:
@@ -406,7 +515,6 @@ def index(request: Request, levantamiento_id: int | None = None, db: Session = D
             "levantamientos": levantamientos,
             "levantamiento": levantamiento,
             "grupos_detalles": _agrupar_detalles_vista(levantamiento.detalles) if levantamiento else [],
-            "grupos_devolucion": _agrupar_detalles_devolucion(levantamiento.detalles) if levantamiento else [],
             "ubicaciones": ubicaciones,
             "personas": personas,
             "categorias": categorias,
@@ -457,49 +565,6 @@ def editar_detalle(detalle_id: int, cantidad_encontrada: int = Form(...), estado
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return RedirectResponse(url=f"/activos/inventario-fisico/?levantamiento_id={levantamiento_id}", status_code=303)
-
-
-@router.post("/{levantamiento_id}/alta-nueva")
-def agregar_alta_nueva_logistica(
-    levantamiento_id: int,
-    nombre: str = Form(...),
-    categoria_id: int = Form(...),
-    cantidad: int = Form(1),
-    marca: str = Form(""),
-    modelo: str = Form(""),
-    serial: str = Form(""),
-    referencia: str = Form(""),
-    descripcion: str = Form(""),
-    estado_fisico: str = Form("Bueno"),
-    observacion: str = Form(""),
-    db: Session = Depends(get_db),
-    user: Usuario = Depends(require_roles("Super Admin", "Superadministrador", "Administrador de Logística", "Admin de Logística")),
-):
-    area = user_area(user)
-    lev = LevantamientoService(db).obtener(levantamiento_id, area)
-    if not lev or lev.estado not in {"Pendiente de aprobación", "Aprobado", "Devuelto parcialmente"}:
-        raise HTTPException(status_code=404, detail="No se encontró un levantamiento abierto para agregar activos en tu área.")
-    try:
-        LevantamientoService(db).agregar_alta_logistica(
-            levantamiento_id=levantamiento_id,
-            usuario_nombre=_nombre_usuario(user),
-            nombre=nombre,
-            categoria_id=categoria_id,
-            cantidad=cantidad,
-            marca=marca,
-            modelo=modelo,
-            serial=serial,
-            referencia=referencia,
-            descripcion=descripcion,
-            estado_fisico=estado_fisico,
-            observacion=observacion,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    return RedirectResponse(
-        url=f"/activos/inventario-fisico/?levantamiento_id={levantamiento_id}&nuevo_activo=1&activo_agregado=1#return-review-section",
-        status_code=303,
-    )
 
 
 @router.post("/importar-excel")
@@ -687,8 +752,7 @@ def revisar(levantamiento_id: int, request: Request, db: Session = Depends(get_d
         raise HTTPException(status_code=404, detail="Levantamiento no encontrado en tu área.")
     return templates.TemplateResponse(request=request, name="activos/inventario_fisico.html", context={
         "title": "Revisar inventario físico", "levantamientos": LevantamientoService(db).listar("Todas"),
-        "levantamiento": lev, "grupos_detalles": _agrupar_detalles_vista(lev.detalles),
-        "grupos_devolucion": _agrupar_detalles_devolucion(lev.detalles), "ubicaciones": UbicacionService(db).listar("Todas"),
+        "levantamiento": lev, "grupos_detalles": _agrupar_detalles_vista(lev.detalles), "ubicaciones": UbicacionService(db).listar("Todas"),
         "personas": PersonaService(db).listar(), "categorias": CategoriaService(db).listar(estado="Activas"),
         "area": area_consulta, "usuario_actual": _nombre_usuario(user), "es_logistica": True, "modo_revision": True,
         "es_super_admin": bool(user.rol and user.rol.nombre in SUPER_ADMIN_ROLES), "current_user_id": user.id,
@@ -883,6 +947,28 @@ def enviar(levantamiento_id: int, firma: str = Form(""), db: Session = Depends(g
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return RedirectResponse(url=f"/activos/inventario-fisico/?levantamiento_id={levantamiento_id}", status_code=303)
+
+
+@router.post("/{levantamiento_id}/devolver-docente")
+def devolver_docente(
+    levantamiento_id: int,
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(require_roles("Super Admin", "Superadministrador", "Administrador de Logística", "Admin de Logística")),
+):
+    """Devuelve al docente un levantamiento enviado que sigue pendiente de aprobación."""
+    area = user_area(user)
+    service = LevantamientoService(db)
+    lev = service.obtener(levantamiento_id, area)
+    if not lev:
+        raise HTTPException(status_code=404, detail="Levantamiento no encontrado en tu área.")
+    try:
+        service.devolver_a_docente(levantamiento_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return RedirectResponse(
+        url=f"/activos/inventario-fisico/?levantamiento_id={levantamiento_id}",
+        status_code=303,
+    )
 
 
 @router.post("/{levantamiento_id}/aprobar")
