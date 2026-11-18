@@ -1,5 +1,5 @@
 {% extends "layouts/base.html" %}
-{% block extra_styles %}<link rel="stylesheet" href="/static/css/inventario_fisico.css?v=20261118-1">{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="/static/css/inventario_fisico.css?v=20261118-2">{% endblock %}
 {% block content %}
 <div class="page-header physical-head">
   <div>
@@ -242,6 +242,53 @@
     {% else %}
       <i class="bi bi-check-circle-fill"></i> <strong>Devolución completa registrada.</strong>
     {% endif %}
+    {% if request.query_params.get('activo_agregado') == '1' %}
+      <div class="notice mt-3" role="status"><i class="bi bi-check-circle-fill"></i> Activo agregado correctamente al inventario de esta bodega.</div>
+    {% endif %}
+    {% if es_logistica|default(false) and levantamiento.estado in ['Aprobado', 'Devuelto parcialmente'] %}
+      <section class="return-new-asset-box mt-3" id="return-new-asset">
+        <details class="return-new-asset-details" {% if request.query_params.get('nuevo_activo') == '1' %}open{% endif %}>
+          <summary class="btn btn-primary return-new-asset-trigger"><i class="bi bi-plus-circle"></i> Agregar activo</summary>
+          <div class="return-new-asset-content">
+            <div class="card-title"><i class="bi bi-box-seam"></i> Agregar artículo que no estaba registrado</div>
+            <p class="help">Usa esta opción mientras recibes los artículos del docente. Registra aquí los artículos nuevos que no aparecen en el inventario entregado. Se incorporarán inmediatamente como activos disponibles en la bodega de este levantamiento; si su estado es Malo o Mantenimiento, quedarán en mantenimiento. No se asignarán al docente ni se contarán como devolución.</p>
+            <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/alta-nueva" class="return-new-asset-form">
+              <div class="return-new-asset-grid">
+                <div><label>Nombre del artículo *</label><input name="nombre" required maxlength="150" placeholder="Ej. Pila AA"></div>
+                <div><label>Categoría *</label><select name="categoria_id" required><option value="">Seleccione...</option>{% for c in categorias %}<option value="{{ c.id }}">{{ c.nombre }}</option>{% endfor %}</select></div>
+                <div><label>Cantidad *</label><input name="cantidad" type="number" min="1" max="500" value="1" required inputmode="numeric"></div>
+                <div><label>Marca</label><input name="marca" maxlength="100" placeholder="Ej. Duracell"></div>
+                <div><label>Modelo</label><input name="modelo" maxlength="100"></div>
+                <div><label>Serial</label><input name="serial" maxlength="150" placeholder="Si aplica; cantidad 1"></div>
+                <div><label>Referencia</label><input name="referencia" maxlength="180"></div>
+                <div><label>Estado físico</label><select name="estado_fisico"><option>Bueno</option><option>Regular</option><option>Malo</option><option>Mantenimiento</option></select></div>
+                <div class="wide"><label>Descripción</label><textarea name="descripcion" rows="2" maxlength="2000" placeholder="Características del artículo"></textarea></div>
+                <div class="wide"><label>Observación de ingreso</label><textarea name="observacion" rows="2" maxlength="2000" placeholder="Ej. Recibido adicionalmente al devolver los artículos del docente"></textarea></div>
+              </div>
+              <div class="return-new-asset-actions">
+                <small class="help">Ubicación de ingreso: <strong>{{ levantamiento.ubicacion.nombre if levantamiento.ubicacion else 'bodega del levantamiento' }}</strong>. Cada marca o serial distinto debe registrarse en una línea independiente.</small>
+                <button type="submit" class="btn btn-success"><i class="bi bi-plus-lg"></i> Guardar y agregar al inventario</button>
+              </div>
+            </form>
+          </div>
+        </details>
+      </section>
+      {% set altas_logistica_devolucion = levantamiento.detalles|selectattr('alta_logistica')|list %}
+      {% if altas_logistica_devolucion %}
+        <div class="return-new-asset-list mt-3">
+          <strong><i class="bi bi-list-check"></i> Artículos agregados durante la recepción</strong>
+          <div class="table-responsive mt-2">
+            <table class="physical-table mobile-card-table">
+              <thead><tr><th>Artículo</th><th>Marca</th><th>Modelo</th><th>Cantidad</th><th>Estado</th><th>Registrado por</th></tr></thead>
+              <tbody>{% for d in altas_logistica_devolucion %}
+                <tr><td data-label="Artículo"><strong>{{ d.nombre }}</strong>{% if d.referencia %}<br><small>Ref. {{ d.referencia }}</small>{% endif %}</td><td data-label="Marca">{{ d.marca or '—' }}</td><td data-label="Modelo">{{ d.modelo or '—' }}</td><td data-label="Cantidad">{{ d.cantidad_encontrada }}</td><td data-label="Estado">{{ 'Mantenimiento' if d.estado_fisico in ['Malo', 'Mantenimiento'] else 'Disponible' }}</td><td data-label="Registrado por">{{ d.revisado_por or '—' }}</td></tr>
+              {% endfor %}</tbody>
+            </table>
+          </div>
+        </div>
+      {% endif %}
+    {% endif %}
+
     {% if levantamiento.responsable %}
       {% if levantamiento.estado != 'Devuelto' %}
         <p class="help mt-2 mb-3">Registra la cantidad total que encontraste. Si se entregaron 10 y ahora hay 20, escribe 20: el sistema registra 10 unidades originales y 10 nuevas disponibles en bodega. Si ahora hay 8, registra 8: quedan 2 faltantes que continúan prestadas al responsable. Es obligatorio explicar cualquier diferencia.</p>
@@ -336,5 +383,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/inventario_fisico.js?v=20261117-4" defer></script>
+<script src="/static/js/inventario_fisico.js?v=20261118-2" defer></script>
 {% endblock %}

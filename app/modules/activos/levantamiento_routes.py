@@ -477,8 +477,8 @@ def agregar_alta_nueva_logistica(
 ):
     area = user_area(user)
     lev = LevantamientoService(db).obtener(levantamiento_id, area)
-    if not lev or lev.estado != "Pendiente de aprobación":
-        raise HTTPException(status_code=404, detail="No se encontró una revisión pendiente en tu área.")
+    if not lev or lev.estado not in {"Pendiente de aprobación", "Aprobado", "Devuelto parcialmente"}:
+        raise HTTPException(status_code=404, detail="No se encontró un levantamiento abierto para agregar activos en tu área.")
     try:
         LevantamientoService(db).agregar_alta_logistica(
             levantamiento_id=levantamiento_id,
@@ -496,7 +496,10 @@ def agregar_alta_nueva_logistica(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return RedirectResponse(url=f"/activos/inventario-fisico/{levantamiento_id}/revisar", status_code=303)
+    return RedirectResponse(
+        url=f"/activos/inventario-fisico/?levantamiento_id={levantamiento_id}&nuevo_activo=1&activo_agregado=1#return-review-section",
+        status_code=303,
+    )
 
 
 @router.post("/importar-excel")
