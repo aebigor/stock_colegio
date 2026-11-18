@@ -9,16 +9,24 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "levantamientos_inventario_detalle",
-        sa.Column("alta_logistica", sa.Boolean(), nullable=False, server_default=sa.text("false")),
-    )
-    op.add_column(
-        "levantamientos_inventario_detalle",
-        sa.Column("descripcion", sa.Text(), nullable=True),
-    )
+    bind = op.get_bind()
+    existing = {column["name"] for column in sa.inspect(bind).get_columns("levantamientos_inventario_detalle")}
+    if "alta_logistica" not in existing:
+        op.add_column(
+            "levantamientos_inventario_detalle",
+            sa.Column("alta_logistica", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        )
+    if "descripcion" not in existing:
+        op.add_column(
+            "levantamientos_inventario_detalle",
+            sa.Column("descripcion", sa.Text(), nullable=True),
+        )
 
 
 def downgrade() -> None:
-    op.drop_column("levantamientos_inventario_detalle", "descripcion")
-    op.drop_column("levantamientos_inventario_detalle", "alta_logistica")
+    bind = op.get_bind()
+    existing = {column["name"] for column in sa.inspect(bind).get_columns("levantamientos_inventario_detalle")}
+    if "descripcion" in existing:
+        op.drop_column("levantamientos_inventario_detalle", "descripcion")
+    if "alta_logistica" in existing:
+        op.drop_column("levantamientos_inventario_detalle", "alta_logistica")

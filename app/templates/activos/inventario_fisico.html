@@ -1,5 +1,5 @@
 {% extends "layouts/base.html" %}
-{% block extra_styles %}<link rel="stylesheet" href="/static/css/inventario_fisico.css?v=20261117-3">{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="/static/css/inventario_fisico.css?v=20261118-restore-add-active-1">{% endblock %}
 {% block content %}
 <div class="page-header physical-head">
   <div>
@@ -45,6 +45,10 @@
   </section>
 </div>
 
+{% if request.query_params.get('aprobacion_anulada') == '1' %}
+<div class="notice notice-success mt-3" role="status"><i class="bi bi-check-circle-fill"></i> Aprobación anulada. Los artículos entregados regresaron a su ubicación y puedes cargar el PDF corregido como un nuevo levantamiento.</div>
+{% endif %}
+
 <section class="physical-card mt-4">
   <div class="card-title"><i class="bi bi-clock-history"></i> Levantamientos</div>
   <div class="table-responsive">
@@ -87,7 +91,9 @@
     <span class="status status-{{ levantamiento.estado|lower|replace(' ','-')|replace('ó','o') }}">{{ levantamiento.estado }}</span>
   </div>
 
-  {% if levantamiento.estado == 'Borrador' %}
+  {% if levantamiento.estado == 'Cancelado' %}
+  <div class="notice locked"><i class="bi bi-archive"></i> <strong>Levantamiento cancelado.</strong> Se conserva como historial. Las entregas asociadas fueron revertidas a Disponible y puedes cargar el PDF corregido como un nuevo levantamiento desde el formulario superior.</div>
+  {% elif levantamiento.estado == 'Borrador' %}
   <div class="notice"><i class="bi bi-unlock"></i> Este levantamiento está abierto. El docente puede corregir cantidades y observaciones. Al enviarlo quedará bloqueado.</div>
 
   {% else %}
@@ -191,6 +197,68 @@
     {% else %}
       <i class="bi bi-check-circle-fill"></i> <strong>Devolución completa registrada.</strong>
     {% endif %}
+    {% if es_logistica|default(false) and levantamiento.estado in ['Aprobado', 'Devuelto parcialmente'] %}
+      <section class="logistics-new-asset-launcher mt-3" id="return-new-asset">
+        <details class="logistics-new-asset-details" id="logistics-new-asset-details" {% if request.query_params.get('nuevo_activo') == '1' %}open{% endif %}>
+          <summary class="btn btn-primary logistics-new-asset-trigger" aria-controls="logistics-new-asset-content" title="Abrir formulario para agregar un activo nuevo">
+            <i class="bi bi-plus-circle"></i> Agregar activo
+          </summary>
+          <div class="logistics-new-asset-content" id="logistics-new-asset-content">
+            <div class="card-title"><i class="bi bi-box-seam"></i> Agregar artículo que no estaba registrado</div>
+            <p class="help">Registra aquí los artículos que el profesor está entregando y que no aparecen en el levantamiento original. Se incorporan como activos nuevos disponibles en esta bodega; si están en mal estado, quedan en mantenimiento. No se asignan nuevamente al docente ni se cuentan como devolución.</p>
+            <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/alta-nueva" class="logistics-new-asset-form">
+              <div class="row g-3">
+                <div class="col-md-4"><label>Nombre del artículo *</label><input name="nombre" required maxlength="150" placeholder="Ej. Pila AA"></div>
+                <div class="col-md-4"><label>Categoría *</label><select name="categoria_id" required><option value="">Seleccione...</option>{% for c in categorias %}<option value="{{ c.id }}">{{ c.nombre }}</option>{% endfor %}</select></div>
+                <div class="col-md-4"><label>Cantidad *</label><input name="cantidad" type="number" min="1" max="500" value="1" required inputmode="numeric"></div>
+                <div class="col-md-3"><label>Marca</label><input name="marca" maxlength="100" placeholder="Ej. Duracell"></div>
+                <div class="col-md-3"><label>Modelo</label><input name="modelo" maxlength="100"></div>
+                <div class="col-md-3"><label>Serial</label><input name="serial" maxlength="150" placeholder="Si aplica; cantidad 1"></div>
+                <div class="col-md-3"><label>Referencia</label><input name="referencia" maxlength="180"></div>
+                <div class="col-md-6"><label>Descripción</label><textarea name="descripcion" rows="2" maxlength="2000"></textarea></div>
+                <div class="col-md-3"><label>Estado físico</label><select name="estado_fisico"><option>Bueno</option><option>Regular</option><option>Malo</option><option>Mantenimiento</option></select></div>
+                <div class="col-md-3"><label>Observación de ingreso</label><textarea name="observacion" rows="2" maxlength="2000"></textarea></div>
+                <div class="col-12 d-flex flex-wrap align-items-center justify-content-between gap-2">
+                  <small class="help">Ubicación: <strong>{{ levantamiento.ubicacion.nombre if levantamiento.ubicacion else 'bodega del levantamiento' }}</strong>. Para marcas distintas registra una línea por marca.</small>
+                  <button type="submit" class="btn btn-success"><i class="bi bi-plus-lg"></i> Guardar activo</button>
+                </div>
+              </div>
+            </form>
+            {% set altas_logistica_devolucion = levantamiento.detalles|selectattr('alta_logistica')|list %}
+            {% if altas_logistica_devolucion %}
+              <div class="logistics-new-asset-list mt-4">
+                <div class="card-title"><i class="bi bi-list-check"></i> Artículos agregados durante la recepción</div>
+                <div class="table-responsive">
+                  <table class="physical-table mobile-card-table logistics-new-asset-list-table">
+                    <thead><tr><th>Artículo</th><th>Categoría</th><th>Marca</th><th>Modelo</th><th>Cantidad</th><th>Estado</th><th>Registrado por</th></tr></thead>
+                    <tbody>{% for d in altas_logistica_devolucion %}
+                      <tr><td data-label="Artículo"><strong>{{ d.nombre }}</strong>{% if d.referencia %}<br><small>Ref. {{ d.referencia }}</small>{% endif %}</td><td data-label="Categoría">{{ d.categoria.nombre if d.categoria else '—' }}</td><td data-label="Marca">{{ d.marca or '—' }}</td><td data-label="Modelo">{{ d.modelo or '—' }}</td><td data-label="Cantidad">{{ d.cantidad_encontrada }}</td><td data-label="Estado">{{ 'Mantenimiento' if d.estado_fisico in ['Malo', 'Mantenimiento'] else 'Disponible' }}</td><td data-label="Registrado por">{{ d.revisado_por or '—' }}</td></tr>
+                    {% endfor %}</tbody>
+                  </table>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        </details>
+      </section>
+    {% endif %}
+
+    {% if es_logistica|default(false) and levantamiento.estado == 'Aprobado' %}
+      <div class="notice mt-3">
+        <strong><i class="bi bi-arrow-counterclockwise"></i> ¿Faltaron artículos en el listado del docente?</strong>
+        <p class="mb-2">Puedes devolver el mismo levantamiento al docente para que complete o corrija el inventario usando el mismo enlace. No se borran los detalles ni los movimientos ya aprobados; los activos continúan asignados al docente hasta que se registre su devolución.</p>
+        <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/reabrir-aprobado" onsubmit="return confirm('¿Reabrir este levantamiento para que el docente agregue o corrija artículos? Se conserva el listado y el mismo enlace. Las entregas ya aprobadas permanecen asignadas al docente y no se crearán préstamos duplicados al aprobar nuevamente.');">
+          <button type="submit" class="btn btn-outline-warning"><i class="bi bi-arrow-counterclockwise"></i> Devolver al docente para corregir</button>
+        </form>
+        <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/anular-aprobacion-reimportar" class="mt-2" onsubmit="return confirm('¿Anular esta aprobación para volver a cargar el PDF completo? Los activos entregados por este levantamiento regresarán a Disponible en esta ubicación, se conservará el historial de movimientos y el levantamiento quedará Cancelado. Después podrás importar el PDF corregido; el sistema comparará sus filas contra los activos ya registrados para evitar duplicados. Solo se permite si aún no has registrado devoluciones.');">
+          <button type="submit" class="btn btn-outline-danger"><i class="bi bi-file-earmark-arrow-up"></i> Anular aprobación y volver a importar PDF</button>
+        </form>
+        <small class="help d-block mt-2">Esta opción no elimina artículos del inventario ni borra el historial. Revierte las entregas de este levantamiento a Disponible y deja el registro anterior como Cancelado.</small>
+      </div>
+    {% elif es_logistica|default(false) and levantamiento.estado == 'Devuelto parcialmente' %}
+      <div class="notice mt-3"><i class="bi bi-info-circle"></i> Este levantamiento ya tiene una devolución parcial registrada. Para corregirlo se debe hacer un ajuste de devolución; no se puede reabrir automáticamente el formulario del docente porque ya existen movimientos reales de devolución.</div>
+    {% endif %}
+
     {% if levantamiento.responsable %}
       {% if levantamiento.estado != 'Devuelto' %}
         <p class="help mt-2 mb-3">Registra la cantidad total que encontraste. Si se entregaron 10 y ahora hay 20, escribe 20: el sistema registra 10 unidades originales y 10 nuevas disponibles en bodega. Si ahora hay 8, registra 8: quedan 2 faltantes que continúan prestadas al responsable. Es obligatorio explicar cualquier diferencia.</p>
@@ -198,7 +266,7 @@
         <p class="help mt-2 mb-3">Resumen de cantidades y observaciones guardadas al recibir los artículos.</p>
       {% endif %}
       {% set resumen_devolucion = namespace(entregadas=0, recibidas=0, nuevas=0, faltantes=0) %}
-      {% for g in grupos_detalles %}
+      {% for g in grupos_devolucion %}
         {% set resumen_devolucion.entregadas = resumen_devolucion.entregadas + g.cantidad_entregada %}
         {% set resumen_devolucion.recibidas = resumen_devolucion.recibidas + g.cantidad_devuelta %}
         {% set resumen_devolucion.nuevas = resumen_devolucion.nuevas + g.cantidad_sobrante %}
@@ -236,7 +304,7 @@
         <table class="physical-table detail-table return-review-table">
           <thead><tr><th>Elemento</th><th>Referencia / rango</th><th>Entregadas</th><th>Cantidad actual encontrada</th><th>Nuevas unidades</th><th>Faltantes</th><th>Estado físico</th><th>Observación de devolución</th><th>Revisión</th></tr></thead>
           <tbody>
-          {% for g in grupos_detalles %}
+          {% for g in grupos_devolucion %}
             <tr class="return-group-row" data-delivered="{{ g.cantidad_entregada }}" data-found="{{ g.cantidad_encontrada_devolucion }}" data-search="{{ (g.nombre ~ ' ' ~ (g.categoria.nombre if g.categoria else '') ~ ' ' ~ g.referencia_rango)|lower|e }}">
               <td data-label="Elemento"><strong>{{ g.nombre }}</strong>{% if g.categoria %}<br><small>{{ g.categoria.nombre }}</small>{% endif %}</td>
               <td data-label="Referencia / rango">{{ g.referencia_rango }}</td>
@@ -269,7 +337,8 @@
           </tbody>
         </table>
       </div>
-      {% set devolucion_lista = levantamiento.detalles|length > 0 and (levantamiento.detalles|selectattr('revisado_devolucion')|list|length == levantamiento.detalles|length) %}
+      {% set detalles_para_devolver = levantamiento.detalles|rejectattr('alta_logistica')|list %}
+      {% set devolucion_lista = detalles_para_devolver|length > 0 and (detalles_para_devolver|selectattr('revisado_devolucion')|list|length == detalles_para_devolver|length) %}
       {% if levantamiento.estado != 'Devuelto' and es_logistica|default(false) %}
         <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/devolver-todo" id="register-return-form" onsubmit="return confirm('¿Registrar la devolución? Los faltantes seguirán prestados y las unidades nuevas se crearán disponibles en la bodega.')">
           <button id="register-return-button" class="btn btn-warning" {% if not devolucion_lista %}disabled title="Guarda la cantidad y observación de todos los grupos para habilitar la devolución"{% endif %}><i class="bi bi-box-arrow-in-down"></i> {% if levantamiento.estado == 'Devuelto parcialmente' %}Actualizar devolución{% else %}Registrar devolución{% endif %}</button>

@@ -195,3 +195,7 @@
   .logistics-new-asset-entry-table tbody td:nth-child(10),
   .logistics-new-asset-entry-table tbody td:last-child { grid-column: 1; }
 }
+
+.status-cancelado { background: #5b2630; color: #ffe4e6; }
+.notice-success { border-color: #24764c; background: #103824; color: #d1fae5; }
+summary.logistics-new-asset-trigger { display: inline-flex !important; visibility: visible !important; opacity: 1 !important; color: #fff !important; background: #176b46 !important; border: 1px solid #269461 !important; }
