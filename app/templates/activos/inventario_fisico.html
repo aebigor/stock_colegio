@@ -1,5 +1,5 @@
 {% extends "layouts/base.html" %}
-{% block extra_styles %}<link rel="stylesheet" href="/static/css/inventario_fisico.css?v=20261117-4">{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="/static/css/inventario_fisico.css?v=20261118-1">{% endblock %}
 {% block content %}
 <div class="page-header physical-head">
   <div>
@@ -91,6 +91,70 @@
   <div class="notice locked"><i class="bi bi-lock-fill"></i> Este levantamiento está bloqueado para edición. Solo Logística/Super Admin puede aprobarlo.</div>
   {% endif %}
 
+  {% if levantamiento.estado == 'Pendiente de aprobación' and es_logistica|default(false) %}
+  <section class="logistics-new-asset-launcher mt-3" id="logistics-new-asset">
+    <details class="logistics-new-asset-details" {% if request.query_params.get('nuevo_activo') == '1' %}open{% endif %}>
+      <summary class="btn btn-primary logistics-new-asset-trigger">
+        <i class="bi bi-plus-circle"></i> Nuevo activo
+      </summary>
+      <div class="logistics-new-asset-content">
+        <div class="card-title"><i class="bi bi-box-seam"></i> Registrar artículo nuevo</div>
+        <p class="help">Registra aquí artículos que acaban de llegar al colegio y que no existían en el inventario. Cada marca, modelo o serial diferente debe registrarse en una línea independiente. Se crearán en el inventario maestro cuando Logística apruebe este levantamiento.</p>
+        <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/alta-nueva" class="logistics-new-asset-form">
+          <div class="table-responsive logistics-new-asset-table-wrap">
+            <table class="physical-table logistics-new-asset-entry-table">
+              <thead>
+                <tr><th>Artículo *</th><th>Categoría *</th><th>Cantidad *</th><th>Marca</th><th>Modelo</th><th>Serial</th><th>Referencia</th><th>Descripción</th><th>Estado</th><th>Observación de ingreso</th><th>Acción</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td data-label="Artículo"><input name="nombre" required maxlength="150" placeholder="Ej. Pila AA"></td>
+                  <td data-label="Categoría"><select name="categoria_id" required><option value="">Seleccione...</option>{% for c in categorias %}<option value="{{ c.id }}">{{ c.nombre }}</option>{% endfor %}</select></td>
+                  <td data-label="Cantidad"><input name="cantidad" type="number" min="1" max="500" value="1" required inputmode="numeric"></td>
+                  <td data-label="Marca"><input name="marca" maxlength="100" placeholder="Duracell"></td>
+                  <td data-label="Modelo"><input name="modelo" maxlength="100"></td>
+                  <td data-label="Serial"><input name="serial" maxlength="150" placeholder="Si aplica"></td>
+                  <td data-label="Referencia"><input name="referencia" maxlength="180"></td>
+                  <td data-label="Descripción"><textarea name="descripcion" rows="2" maxlength="2000" placeholder="Características"></textarea></td>
+                  <td data-label="Estado"><select name="estado_fisico"><option>Bueno</option><option>Regular</option><option>Malo</option><option>Mantenimiento</option></select></td>
+                  <td data-label="Observación"><textarea name="observacion" rows="2" maxlength="2000" placeholder="Motivo de ingreso, factura, fecha…"></textarea></td>
+                  <td data-label="Acción"><button class="btn btn-primary logistics-new-asset-submit"><i class="bi bi-plus-lg"></i> Agregar</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <small class="help d-block mt-2">La ubicación de ingreso será <strong>{{ levantamiento.ubicacion.nombre if levantamiento.ubicacion else 'la ubicación del levantamiento' }}</strong>. Si registras un serial individual, utiliza cantidad 1. Para pilas de marcas distintas, agrega una línea por cada marca.</small>
+        </form>
+
+        {% set altas_logistica = levantamiento.detalles|selectattr('alta_logistica')|list %}
+        {% if altas_logistica %}
+        <div class="logistics-new-asset-list mt-4">
+          <div class="card-title"><i class="bi bi-list-check"></i> Artículos nuevos agregados a esta revisión</div>
+          <div class="table-responsive">
+            <table class="physical-table mobile-card-table logistics-new-asset-list-table">
+              <thead><tr><th>Artículo</th><th>Categoría</th><th>Marca</th><th>Modelo</th><th>Cantidad</th><th>Estado</th><th>Registrado por</th></tr></thead>
+              <tbody>
+                {% for d in altas_logistica %}
+                <tr>
+                  <td data-label="Artículo"><strong>{{ d.nombre }}</strong>{% if d.referencia %}<br><small>Ref. {{ d.referencia }}</small>{% endif %}</td>
+                  <td data-label="Categoría">{{ d.categoria.nombre if d.categoria else '—' }}</td>
+                  <td data-label="Marca">{{ d.marca or '—' }}</td>
+                  <td data-label="Modelo">{{ d.modelo or '—' }}</td>
+                  <td data-label="Cantidad">{{ d.cantidad_encontrada }}</td>
+                  <td data-label="Estado">{{ d.estado_fisico }}</td>
+                  <td data-label="Registrado por">{{ d.revisado_por or '—' }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </details>
+  </section>
+  {% endif %}
+
   {% if levantamiento.estado != 'Aprobado' %}
   <div class="table-responsive mt-3">
     <table class="physical-table detail-table mobile-card-table">
@@ -134,26 +198,6 @@
   </div>
   {% endif %}
 
-  {% if levantamiento.estado == 'Pendiente de aprobación' and es_logistica|default(false) and modo_revision|default(false) %}
-  <section class="add-found logistics-new-asset mt-4" id="logistics-new-asset">
-    <div class="card-title"><i class="bi bi-box-seam"></i> Agregar artículo nuevo al inventario</div>
-    <p class="help">Usa esta sección para artículos que acaban de llegar al colegio y no existían en el inventario. Cada marca o modelo diferente debe registrarse en una línea independiente. Al aprobar el levantamiento se crearán los activos con código, código de barras y QR, disponibles en la ubicación revisada.</p>
-    <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/alta-nueva" class="row g-3 logistics-new-asset-form">
-      <div class="col-12 col-md-5"><label>Nombre del artículo *</label><input name="nombre" required maxlength="150" placeholder="Ej. Pila recargable AA"></div>
-      <div class="col-12 col-md-4"><label>Categoría *</label><select name="categoria_id" required><option value="">Seleccione...</option>{% for c in categorias %}<option value="{{ c.id }}">{{ c.nombre }}</option>{% endfor %}</select></div>
-      <div class="col-6 col-md-3"><label>Cantidad *</label><input name="cantidad" type="number" min="1" max="500" value="1" required></div>
-      <div class="col-6 col-md-3"><label>Marca</label><input name="marca" maxlength="100" placeholder="Ej. Duracell"></div>
-      <div class="col-6 col-md-3"><label>Modelo</label><input name="modelo" maxlength="100"></div>
-      <div class="col-6 col-md-3"><label>Serial</label><input name="serial" maxlength="150" placeholder="Solo si cantidad es 1"></div>
-      <div class="col-12 col-md-3"><label>Referencia / código proveedor</label><input name="referencia" maxlength="180"></div>
-      <div class="col-12"><label>Descripción</label><textarea name="descripcion" rows="2" maxlength="2000" placeholder="Características, capacidad, presentación, medidas, etc."></textarea></div>
-      <div class="col-12 col-md-4"><label>Estado físico</label><select name="estado_fisico"><option>Bueno</option><option>Regular</option><option>Malo</option><option>Mantenimiento</option></select></div>
-      <div class="col-12 col-md-8"><label>Observación de ingreso</label><textarea name="observacion" rows="2" maxlength="2000" placeholder="Ej. Ingreso por compra, factura, fecha o motivo de la incorporación."></textarea></div>
-      <div class="col-12 logistics-new-asset-actions"><button class="btn btn-primary"><i class="bi bi-plus-circle"></i> Agregar artículo a la revisión</button></div>
-    </form>
-    <small class="help d-block mt-2">La ubicación de ingreso será: <strong>{{ levantamiento.ubicacion.nombre if levantamiento.ubicacion else 'Ubicación del levantamiento' }}</strong>. El artículo no se incorpora al inventario maestro hasta que Logística apruebe la revisión.</small>
-  </section>
-  {% endif %}
 
   {% if levantamiento.estado == 'Borrador' %}
   <div class="add-found mt-4">
