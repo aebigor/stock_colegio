@@ -638,6 +638,10 @@ def _agrupar_detalles_vista(detalles):
             "categoria": primero.categoria,
             "cantidad_sistema": sum(int(d.cantidad_sistema or 0) for d in detalles_grupo),
             "cantidad_encontrada": sum(int(d.cantidad_encontrada or 0) for d in detalles_grupo),
+            "cantidad_en_bodega": sum(
+                int(d.cantidad_encontrada or 0) for d in detalles_grupo
+                if getattr(d, "alta_logistica", False)
+            ),
             "referencia_rango": rango,
             "estado_fisico": primero.estado_fisico,
             "observacion": primero.observacion,
@@ -662,8 +666,12 @@ def _agrupar_detalles_vista(detalles):
 
 
 def _agrupar_detalles_devolucion(detalles):
-    """Las altas hechas por Logística no forman parte de los artículos prestados al docente."""
-    return [g for g in _agrupar_detalles_vista(detalles) if not g.get("alta_logistica")]
+    """Incluye préstamos y activos ya existentes en bodega.
+
+    Las altas logísticas se muestran como revisadas/disponibles, pero sus cantidades
+    no se suman a la devolución porque no fueron entregadas al docente.
+    """
+    return _agrupar_detalles_vista(detalles)
 
 
 def _es_logistica(user: Usuario) -> bool:
@@ -763,6 +771,11 @@ def index(request: Request, levantamiento_id: int | None = None, db: Session = D
     levantamiento = service.obtener(levantamiento_id, area_consulta) if levantamiento_id else None
     if levantamiento and not es_super_admin and levantamiento.area != area:
         levantamiento = None
+    if levantamiento and es_logistica and levantamiento.estado in {"Aprobado", "Devuelto parcialmente"}:
+        # Mostrar en la devolución cualquier activo agregado manualmente a la misma
+        # ubicación y área desde que se creó el levantamiento. Es idempotente.
+        service.sincronizar_activos_devolucion(levantamiento, _nombre_usuario(user), commit=True)
+        levantamiento = service.obtener(levantamiento_id, area_consulta)
     ubicaciones = UbicacionService(db).listar("Todas")
     personas = PersonaService(db).listar()
     categorias = CategoriaService(db).listar(estado="Activas")

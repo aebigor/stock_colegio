@@ -325,26 +325,36 @@
           <thead><tr><th>Elemento</th><th>Referencia / rango</th><th>Entregadas</th><th>Cantidad actual encontrada</th><th>Nuevas unidades</th><th>Faltantes</th><th>Estado físico</th><th>Observación de devolución</th><th>Revisión</th></tr></thead>
           <tbody>
           {% for g in grupos_devolucion %}
-            <tr class="return-group-row" data-delivered="{{ g.cantidad_entregada }}" data-found="{{ g.cantidad_encontrada_devolucion }}" data-search="{{ (g.nombre ~ ' ' ~ (g.categoria.nombre if g.categoria else '') ~ ' ' ~ g.referencia_rango)|lower|e }}">
-              <td data-label="Elemento"><strong>{{ g.nombre }}</strong>{% if g.categoria %}<br><small>{{ g.categoria.nombre }}</small>{% endif %}</td>
+            <tr class="return-group-row{% if g.alta_logistica %} return-inventory-existing-row{% endif %}"
+                data-delivered="{{ g.cantidad_entregada if not g.alta_logistica else 0 }}"
+                data-found="{{ g.cantidad_encontrada_devolucion if not g.alta_logistica else 0 }}"
+                data-inventory-existing="{{ 'true' if g.alta_logistica else 'false' }}"
+                data-search="{{ (g.nombre ~ ' ' ~ (g.categoria.nombre if g.categoria else '') ~ ' ' ~ g.referencia_rango ~ ' ' ~ (g.detalles[0].marca or '') ~ ' ' ~ (g.detalles[0].modelo or ''))|lower|e }}">
+              <td data-label="Elemento"><strong>{{ g.nombre }}</strong>{% if g.categoria %}<br><small>{{ g.categoria.nombre }}</small>{% endif %}{% if g.alta_logistica %}<br><span class="badge bg-info text-dark mt-1">Ya registrado en inventario</span>{% endif %}</td>
               <td data-label="Referencia / rango">{{ g.referencia_rango }}</td>
-              <td data-label="Entregadas"><strong>{{ g.cantidad_entregada }}</strong></td>
+              <td data-label="Entregadas">{% if g.alta_logistica %}<span class="text-secondary">No prestado</span>{% else %}<strong>{{ g.cantidad_entregada }}</strong>{% endif %}</td>
               <td data-label="Cantidad actual encontrada">
-                {% if levantamiento.estado != 'Devuelto' and es_logistica|default(false) %}
+                {% if g.alta_logistica %}
+                  <strong>{{ g.cantidad_en_bodega }}</strong><small class="d-block text-success">Disponible en esta ubicación</small>
+                {% elif levantamiento.estado != 'Devuelto' and es_logistica|default(false) %}
                   <input class="return-quantity" type="number" name="cantidad_devuelta" min="0" max="5000" inputmode="numeric" step="1" value="{{ g.cantidad_encontrada_devolucion }}" form="return-form-{{ loop.index }}" aria-label="Cantidad total encontrada de {{ g.nombre }}">
                 {% else %}<strong data-found-value="{{ g.cantidad_encontrada_devolucion }}">{{ g.cantidad_encontrada_devolucion }}</strong>{% endif %}
               </td>
-              <td data-label="Nuevas unidades"><span class="return-surplus-count">{{ g.cantidad_sobrante }}</span></td>
-              <td data-label="Faltantes"><span class="return-missing-count">{{ g.cantidad_faltante }}</span></td>
+              <td data-label="Nuevas unidades">{% if g.alta_logistica %}—{% else %}<span class="return-surplus-count">{{ g.cantidad_sobrante }}</span>{% endif %}</td>
+              <td data-label="Faltantes">{% if g.alta_logistica %}0{% else %}<span class="return-missing-count">{{ g.cantidad_faltante }}</span>{% endif %}</td>
               <td data-label="Estado físico">{{ g.estado_fisico or '—' }}</td>
               <td data-label="Observación de devolución">
-                {% if levantamiento.estado != 'Devuelto' and es_logistica|default(false) %}
+                {% if g.alta_logistica %}
+                  {{ g.observacion or 'Activo existente en la ubicación; no hace parte de los artículos prestados al docente.' }}
+                {% elif levantamiento.estado != 'Devuelto' and es_logistica|default(false) %}
                   <textarea class="return-observation" name="observacion_devolucion" rows="2" maxlength="2000" placeholder="Ej. Había 10 y se encontraron 20: llegaron 10 nuevas. O faltan 2. Explica la diferencia." form="return-form-{{ loop.index }}">{{ g.observacion_devolucion or '' }}</textarea>
                 {% else %}{{ g.observacion_devolucion or '—' }}{% endif %}
                 {% if g.devolucion_revisada_por %}<small class="d-block mt-1">Registró: {{ g.devolucion_revisada_por }}{% if g.devolucion_revisada_at %} · {{ g.devolucion_revisada_at.strftime('%d/%m/%Y %H:%M') }}{% endif %}</small>{% endif %}
               </td>
               <td data-label="Revisión">
-                {% if levantamiento.estado != 'Devuelto' and es_logistica|default(false) %}
+                {% if g.alta_logistica %}
+                  <span class="badge bg-success">✓ Revisado automáticamente</span><small class="d-block mt-1">No bloquea la devolución.</small>
+                {% elif levantamiento.estado != 'Devuelto' and es_logistica|default(false) %}
                   <form id="return-form-{{ loop.index }}" method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/grupo/revisar-devolucion" data-ajax-return-form data-saved="{{ 'true' if g.todos_revisados_devolucion else 'false' }}">
                     <input type="hidden" name="detalle_ids_csv" value="{{ g.ids }}">
                     <button type="submit" class="btn btn-sm {{ 'btn-success' if g.todos_revisados_devolucion else 'btn-outline-primary' }}" data-return-save-button>{{ '✓ Guardado' if g.todos_revisados_devolucion else 'Guardar revisión' }}</button>
@@ -389,7 +399,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/inventario_fisico.js?v=20261119-return-signature-1" defer></script>
+<script src="/static/js/inventario_fisico.js?v=20261119-auto-reviewed-assets-1" defer></script>
 <script>
 (function () {
   const canvas = document.getElementById('firma-devolucion-canvas');

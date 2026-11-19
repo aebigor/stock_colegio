@@ -58,6 +58,38 @@ def estado_inventario_para_alta(estado_fisico):
     return "Mantenimiento" if estado in {"malo", "mantenimiento"} else "Disponible"
 
 
+def detalles_pendientes_devolucion(detalles):
+    """Solo exige revisión de artículos que fueron parte de la entrega al docente.
+
+    Las altas logísticas y los activos que ya estaban registrados en la ubicación
+    no se prestaron en este levantamiento, por lo que nunca deben bloquear su cierre.
+    """
+    return [
+        detalle for detalle in detalles
+        if not getattr(detalle, "alta_logistica", False)
+        and not getattr(detalle, "revisado_devolucion", False)
+    ]
+
+
+def activo_sincronizable_devolucion(activo, levantamiento):
+    """Valida que un activo manualmente registrado pertenezca a esta bodega/área.
+
+    Solo se incorporan activos disponibles o en mantenimiento. Un activo Prestado
+    podría estar bajo custodia de otra persona y no debe marcarse como revisado.
+    """
+    estado = (getattr(activo, "estado", "") or "").strip().casefold()
+    area_activo = (getattr(activo, "area", "") or "").strip().casefold()
+    area_levantamiento = (getattr(levantamiento, "area", "") or "").strip().casefold()
+    return bool(
+        getattr(activo, "activo", False)
+        and getattr(activo, "empresa_id", None) == getattr(levantamiento, "empresa_id", None)
+        and getattr(activo, "ubicacion_id", None) == getattr(levantamiento, "ubicacion_id", None)
+        and area_activo
+        and area_activo == area_levantamiento
+        and estado in {"disponible", "mantenimiento"}
+    )
+
+
 def _normalizar_grupo_detalle(detalle):
     def normalizar(valor):
         texto = unicodedata.normalize("NFD", str(valor or "").strip().casefold())
@@ -465,7 +497,117 @@ class LevantamientoService:
             ))
             creados_previos.add(activo_nuevo.id)
             siguiente += 1
+
+        # Esta alta no forma parte de los artículos prestados al docente.
+        # Se marca automáticamente como resuelta en el checklist de devolución.
+        detalle.cantidad_devuelta = 0
+        detalle.revisado_devolucion = True
+        detalle.devolucion_revisada_por = usuario_nombre
+        detalle.devolucion_revisada_at = datetime.now(timezone.utc)
         return len(creados_previos)
+
+    def sincronizar_activos_devolucion(self, levantamiento, usuario_nombre, commit=True):
+        """Añade al detalle los activos existentes en la misma bodega y los marca resueltos.
+
+        Esto cubre artículos creados manualmente desde Activos después de generar el
+        levantamiento. Se agregan como altas logísticas enlazadas al activo existente:
+        aparecen en la devolución, pero no se cuentan como préstamos ni se recrean.
+        """
+        if not levantamiento or levantamiento.estado not in {"Aprobado", "Devuelto parcialmente"}:
+            return 0
+
+        # Serializa sincronizaciones concurrentes para evitar dos detalles del mismo activo.
+        self.db.query(LevantamientoInventario.id).filter(
+            LevantamientoInventario.id == levantamiento.id,
+            LevantamientoInventario.empresa_id == levantamiento.empresa_id,
+        ).with_for_update().first()
+
+        detalles_actuales = self.db.query(LevantamientoDetalle).filter(
+            LevantamientoDetalle.empresa_id == levantamiento.empresa_id,
+            LevantamientoDetalle.levantamiento_id == levantamiento.id,
+        ).all()
+        activos_ya_asociados = {d.activo_id for d in detalles_actuales if d.activo_id}
+        ahora = datetime.now(timezone.utc)
+
+        # Los activos creados por el botón de alta o por sobrantes ya están ligados
+        # a detalles de este levantamiento mediante marcadores en sus movimientos.
+        movimientos_altas = self.db.query(Movimiento.activo_id, Movimiento.observaciones).filter(
+            Movimiento.empresa_id == levantamiento.empresa_id,
+            Movimiento.tipo.in_(["Alta nuevo artículo", "Alta por sobrante"]),
+            Movimiento.activo_id.is_not(None),
+        ).all()
+        marcadores = (
+            f"alta_logistica_levantamiento={levantamiento.id}_detalle=",
+            f"sobrante_devolucion_levantamiento={levantamiento.id}_detalle=",
+        )
+        for activo_id, observaciones in movimientos_altas:
+            texto = observaciones or ""
+            if any(marcador in texto for marcador in marcadores):
+                activos_ya_asociados.add(activo_id)
+
+        candidatos = self.db.query(Activo).filter(
+            Activo.empresa_id == levantamiento.empresa_id,
+            Activo.ubicacion_id == levantamiento.ubicacion_id,
+            Activo.activo.is_(True),
+            Activo.estado.in_(["Disponible", "Mantenimiento"]),
+        ).order_by(Activo.id.asc()).all()
+
+        agregados = 0
+        for activo in candidatos:
+            if activo.id in activos_ya_asociados:
+                continue
+            if not activo_sincronizable_devolucion(activo, levantamiento):
+                continue
+
+            estado_fisico = "Mantenimiento" if (activo.estado or "").strip().casefold() == "mantenimiento" else "Bueno"
+            detalle = LevantamientoDetalle(
+                empresa_id=levantamiento.empresa_id,
+                levantamiento_id=levantamiento.id,
+                activo_id=activo.id,
+                categoria_id=activo.categoria_id,
+                nombre=activo.nombre,
+                referencia=activo.codigo_barras or activo.codigo,
+                serial=activo.serial,
+                marca=activo.marca,
+                modelo=activo.modelo,
+                descripcion=activo.descripcion,
+                cantidad_sistema=0,
+                cantidad_encontrada=1,
+                cantidad_devuelta=0,
+                cantidad_sobrante=0,
+                estado_fisico=estado_fisico,
+                observacion=(
+                    "Activo ya registrado individualmente en esta ubicación. "
+                    "Se incluye como disponible en bodega; no corresponde a un préstamo de este levantamiento."
+                ),
+                es_nuevo=True,
+                alta_logistica=True,
+                verificado_logistica=True,
+                revisado_por="Sistema: activo existente en ubicación",
+                revisado_at=ahora,
+                revisado_devolucion=True,
+                devolucion_revisada_por="Sistema: activo existente en ubicación",
+                devolucion_revisada_at=ahora,
+            )
+            self.db.add(detalle)
+            levantamiento.detalles.append(detalle)
+            activos_ya_asociados.add(activo.id)
+            agregados += 1
+
+        # Repara también altas logísticas antiguas que se guardaron antes de que
+        # el checklist de devolución las reconociera como resueltas.
+        for detalle in detalles_actuales:
+            if getattr(detalle, "alta_logistica", False) and not getattr(detalle, "revisado_devolucion", False):
+                detalle.cantidad_devuelta = 0 if detalle.cantidad_devuelta is None else detalle.cantidad_devuelta
+                detalle.revisado_devolucion = True
+                detalle.devolucion_revisada_por = detalle.devolucion_revisada_por or "Sistema: alta logística"
+                detalle.devolucion_revisada_at = detalle.devolucion_revisada_at or ahora
+
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
+        return agregados
 
 
     def _actualizar_grupo_detalles(self, lev, detalle_ids, cantidad_encontrada, estado_fisico, observacion):
@@ -989,10 +1131,11 @@ class LevantamientoService:
         if len(firma_docente) > 5_000_000:
             raise ValueError("La firma es demasiado grande. Limpia el recuadro y vuelve a firmar.")
 
-        pendientes_revision = [
-            d for d in lev.detalles
-            if not getattr(d, "alta_logistica", False) and not getattr(d, "revisado_devolucion", False)
-        ]
+        # Sincroniza activos creados manualmente en esta ubicación desde que
+        # se aprobó el levantamiento. Quedan ligados al detalle como existentes,
+        # no como préstamos nuevos al docente.
+        self.sincronizar_activos_devolucion(lev, usuario, commit=False)
+        pendientes_revision = detalles_pendientes_devolucion(lev.detalles)
         if pendientes_revision:
             raise ValueError(
                 "Debes guardar la cantidad y observación de todos los grupos antes de registrar la devolución. "
