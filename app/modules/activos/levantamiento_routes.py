@@ -1495,101 +1495,233 @@ def descargar_excel_devolucion(
     user: Usuario = Depends(get_current_user),
 ):
     area = user_area(user)
+
+    # Cada descarga consulta nuevamente la base de datos. La hoja principal no
+    # utiliza el JSON congelado del acta porque Logistica puede corregir despues
+    # una cantidad u observacion (por ejemplo, un faltante que el docente repuso).
+    db.expire_all()
     lev = LevantamientoService(db).obtener(levantamiento_id, area)
     if not lev:
-        raise HTTPException(status_code=404, detail="Levantamiento no encontrado en tu área.")
+        raise HTTPException(status_code=404, detail="Levantamiento no encontrado en tu area.")
+
     actas = db.query(LevantamientoDevolucion).filter(
         LevantamientoDevolucion.empresa_id == lev.empresa_id,
         LevantamientoDevolucion.levantamiento_id == lev.id,
     ).order_by(LevantamientoDevolucion.created_at.asc(), LevantamientoDevolucion.id.asc()).all()
-    actas_exportar = list(actas)
-    if not actas_exportar:
-        if lev.estado not in {"Devuelto", "Devuelto parcialmente"}:
-            raise HTTPException(status_code=409, detail="Este levantamiento todavía no tiene una devolución registrada.")
+    if not actas and lev.estado not in {"Devuelto", "Devuelto parcialmente"}:
+        raise HTTPException(status_code=409, detail="Este levantamiento todavia no tiene una devolucion registrada.")
 
-        # Compatibilidad con devoluciones históricas anteriores a la tabla de actas
-        # firmadas. Se exportan los datos disponibles sin inventar una firma.
-        detalles_historicos = []
-        for grupo in _agrupar_detalles_vista([d for d in lev.detalles if not getattr(d, "alta_logistica", False)]):
-            grupo_detalles = grupo.get("detalles", [])
-            entregadas = sum(cantidad_entregada_detalle(d) for d in grupo_detalles)
-            recibidas = sum(cantidad_devuelta_detalle(d) for d in grupo_detalles)
-            nuevas = sum(cantidad_sobrante_detalle(d) for d in grupo_detalles)
-            primero = grupo_detalles[0] if grupo_detalles else None
-            detalles_historicos.append({
-                "nombre": grupo.get("nombre", ""),
-                "categoria": grupo["categoria"].nombre if grupo.get("categoria") else "",
-                "referencia": grupo.get("referencia_rango", "—"),
-                "marca": getattr(primero, "marca", "") or "",
-                "modelo": getattr(primero, "modelo", "") or "",
-                "serial": ", ".join(sorted({d.serial for d in grupo_detalles if d.serial})),
-                "cantidad_entregada": entregadas,
-                "devueltas_esta_acta": recibidas,
-                "nuevas_esta_acta": nuevas,
-                "faltantes_pendientes": max(0, entregadas - recibidas),
-                "estado_fisico": grupo.get("estado_fisico", "") or "",
-                "observacion": next((d.observacion_devolucion for d in grupo_detalles if d.observacion_devolucion), "") or "",
-            })
+    ultima_acta = actas[-1] if actas else None
+    ahora = datetime.now(timezone.utc)
 
-        fecha_historica = lev.updated_at or lev.aprobado_at or lev.created_at
-        actas_exportar = [{
-            "created_at": fecha_historica,
-            "registrado_por": "Registro histórico (sin acta de firma almacenada)",
-            "docente_nombre": lev.responsable.nombre if lev.responsable else "—",
-            "firma_docente": None,
-            "detalles_resumen": detalles_historicos,
-            "total_entregadas": sum(x["cantidad_entregada"] for x in detalles_historicos),
-            "total_recibidas": sum(x["devueltas_esta_acta"] for x in detalles_historicos),
-            "total_nuevas": sum(x["nuevas_esta_acta"] for x in detalles_historicos),
-            "total_faltantes": sum(x["faltantes_pendientes"] for x in detalles_historicos),
-            "nota_historica": (
-                "IMPORTANTE: esta devolución se registró antes de guardar actas firmadas. "
-                "No existe una imagen de firma de devolución almacenada para este registro histórico."
-            ),
-        }]
+    def _utc(fecha):
+        if not fecha:
+            return None
+        if fecha.tzinfo is None:
+            fecha = fecha.replace(tzinfo=timezone.utc)
+        return fecha.astimezone(timezone.utc)
+
+    # Solo se incluyen elementos que formaron parte de la entrega al docente.
+    # Las altas hechas por Logistica directamente en bodega no son devoluciones.
+    detalles_devolucion = [
+        d for d in lev.detalles
+        if not getattr(d, "alta_logistica", False)
+        and cantidad_entregada_detalle(d) > 0
+    ]
+    ultima_edicion = max(
+        (d.devolucion_revisada_at for d in detalles_devolucion if d.devolucion_revisada_at),
+        key=lambda fecha: _utc(fecha),
+        default=None,
+    )
+    fecha_firma_actual = ultima_acta.created_at if ultima_acta else None
+    editado_despues_firma = bool(
+        ultima_edicion and fecha_firma_actual
+        and _utc(ultima_edicion) > _utc(fecha_firma_actual)
+    )
+    detalle_ultima_edicion = next((
+        d for d in sorted(
+            detalles_devolucion,
+            key=lambda d: _utc(d.devolucion_revisada_at) or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        ) if d.devolucion_revisada_at
+    ), None)
+    usuario_ultima_edicion = getattr(detalle_ultima_edicion, "devolucion_revisada_por", None)
 
     wb = Workbook()
-    wb.remove(wb.active)
-    for numero, acta in enumerate(actas_exportar, start=1):
-        ws = wb.create_sheet(title=f"Devolucion {numero:02d}"[:31])
-        _estilizar_hoja_excel(ws, f"ACTA DE DEVOLUCIÓN #{numero}", lev, "Constancia de los elementos recibidos de vuelta.")
-        if isinstance(acta, dict):
-            fecha_acta = acta.get("created_at")
-            registrado_por = acta.get("registrado_por") or "—"
-            docente_nombre = acta.get("docente_nombre") or "—"
-            resumen_acta = acta.get("detalles_resumen") or []
-            firma_docente = acta.get("firma_docente")
-            total_entregadas = acta.get("total_entregadas", 0)
-            total_recibidas = acta.get("total_recibidas", 0)
-            total_nuevas = acta.get("total_nuevas", 0)
-            total_faltantes = acta.get("total_faltantes", 0)
-            nota_historica = acta.get("nota_historica")
-        else:
-            fecha_acta = acta.created_at
-            registrado_por = acta.registrado_por or "—"
-            docente_nombre = acta.docente_nombre or "—"
-            resumen_acta = acta.detalles_resumen or []
-            firma_docente = acta.firma_docente
-            total_entregadas = acta.total_entregadas
-            total_recibidas = acta.total_recibidas
-            total_nuevas = acta.total_nuevas
-            total_faltantes = acta.total_faltantes
-            nota_historica = None
+    ws_actual = wb.active
+    ws_actual.title = "Estado actual"
+    _estilizar_hoja_excel(
+        ws_actual,
+        "ACTA DE DEVOLUCION - ESTADO ACTUAL",
+        lev,
+        "Resumen generado con los datos vigentes del sistema al momento de descargar este archivo.",
+    )
 
-        ws["A5"] = "Fecha de devolución"
-        ws["B5"] = fecha_acta.strftime("%d/%m/%Y %H:%M") if fecha_acta else "—"
-        ws["D5"] = "Recibió / registró"
+    ws_actual["A5"] = "Generado / actualizado"
+    ws_actual["B5"] = ahora.strftime("%d/%m/%Y %H:%M UTC")
+    ws_actual["D5"] = "Estado del levantamiento"
+    ws_actual["E5"] = lev.estado or "-"
+    ws_actual["G5"] = "Ultima firma registrada"
+    ws_actual["H5"] = fecha_firma_actual.strftime("%d/%m/%Y %H:%M") if fecha_firma_actual else "Sin acta firmada"
+    ws_actual["A6"] = "Recibio / registro"
+    ws_actual["B6"] = ultima_acta.registrado_por if ultima_acta else "Registro historico"
+    ws_actual["D6"] = "Docente que entrega"
+    ws_actual["E6"] = (ultima_acta.docente_nombre if ultima_acta else None) or (lev.responsable.nombre if lev.responsable else "-")
+    ws_actual["G6"] = "Ultima modificacion"
+    ws_actual["H6"] = (
+        f"{ultima_edicion.strftime('%d/%m/%Y %H:%M')} - {usuario_ultima_edicion or 'Logistica'}"
+        if ultima_edicion else "-"
+    )
+    for row in (5, 6):
+        for cell in ws_actual[row]:
+            if cell.column in (1, 4, 7):
+                cell.font = Font(bold=True, color="17365D")
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
+
+    ws_actual.merge_cells("A7:L7")
+    if editado_despues_firma:
+        mensaje_actualizacion = (
+            "DATOS ACTUALIZADOS DESPUES DE LA FIRMA: esta hoja refleja las cantidades y observaciones vigentes. "
+            "La imagen de firma adjunta corresponde a la ultima acta firmada y se conserva como antecedente; "
+            "no representa una nueva firma de los cambios posteriores."
+        )
+        ws_actual["A7"].font = Font(bold=True, color="9C6500")
+        ws_actual["A7"].fill = PatternFill("solid", fgColor="FFF2CC")
+    elif not ultima_acta:
+        mensaje_actualizacion = (
+            "REGISTRO HISTORICO: no existe una imagen de firma de devolucion almacenada. "
+            "Las cantidades de esta hoja se leen directamente de los detalles actuales."
+        )
+        ws_actual["A7"].font = Font(bold=True, color="9C6500")
+        ws_actual["A7"].fill = PatternFill("solid", fgColor="FFF2CC")
+    else:
+        mensaje_actualizacion = "Esta hoja se genera en cada descarga usando los ultimos datos guardados en el sistema."
+        ws_actual["A7"].font = Font(italic=True, color="44546A")
+    ws_actual["A7"] = mensaje_actualizacion
+    ws_actual["A7"].alignment = Alignment(wrap_text=True, vertical="center")
+    ws_actual.row_dimensions[7].height = 42
+
+    columnas_actuales = [
+        "Elemento", "Categoria", "Referencia", "Marca", "Modelo", "Serial",
+        "Entregadas", "Recibidas (actual)", "Nuevas unidades (actual)",
+        "Faltantes actuales", "Estado fisico", "Observacion actual",
+    ]
+    fila_header_actual = 9
+    _estilizar_encabezado(ws_actual, fila_header_actual, columnas_actuales)
+    fila_actual = fila_header_actual + 1
+    total_entregadas_actual = 0
+    total_recibidas_actual = 0
+    total_nuevas_actual = 0
+    total_faltantes_actual = 0
+
+    grupos_actuales = _agrupar_detalles_vista(detalles_devolucion)
+    for grupo in grupos_actuales:
+        grupo_detalles = grupo.get("detalles", [])
+        if not grupo_detalles:
+            continue
+        primero = grupo_detalles[0]
+        entregadas = sum(cantidad_entregada_detalle(d) for d in grupo_detalles)
+        recibidas = sum(cantidad_devuelta_detalle(d) for d in grupo_detalles)
+        nuevas = sum(cantidad_sobrante_detalle(d) for d in grupo_detalles)
+        faltantes = max(0, entregadas - recibidas)
+        observaciones = list(dict.fromkeys(
+            (d.observacion_devolucion or "").strip()
+            for d in grupo_detalles if (d.observacion_devolucion or "").strip()
+        ))
+        estados = list(dict.fromkeys(
+            (d.estado_fisico or "").strip()
+            for d in grupo_detalles if (d.estado_fisico or "").strip()
+        ))
+        seriales = ", ".join(sorted({d.serial for d in grupo_detalles if d.serial}))
+        valores = [
+            grupo.get("nombre", ""),
+            grupo["categoria"].nombre if grupo.get("categoria") else "",
+            grupo.get("referencia_rango", "-"),
+            getattr(primero, "marca", "") or "",
+            getattr(primero, "modelo", "") or "",
+            seriales,
+            entregadas,
+            recibidas,
+            nuevas,
+            faltantes,
+            " / ".join(estados) or "-",
+            " | ".join(observaciones) or "-",
+        ]
+        for col, valor in enumerate(valores, start=1):
+            ws_actual.cell(fila_actual, col, valor)
+            ws_actual.cell(fila_actual, col).alignment = Alignment(vertical="top", wrap_text=True)
+        total_entregadas_actual += entregadas
+        total_recibidas_actual += recibidas
+        total_nuevas_actual += nuevas
+        total_faltantes_actual += faltantes
+        fila_actual += 1
+
+    ws_actual.cell(fila_actual, 1, "TOTALES ACTUALES").font = Font(bold=True)
+    for col, valor in (
+        (7, total_entregadas_actual),
+        (8, total_recibidas_actual),
+        (9, total_nuevas_actual),
+        (10, total_faltantes_actual),
+    ):
+        ws_actual.cell(fila_actual, col, valor).font = Font(bold=True)
+    ws_actual.auto_filter.ref = f"A{fila_header_actual}:L{max(fila_actual - 1, fila_header_actual)}"
+    ws_actual.freeze_panes = f"A{fila_header_actual + 1}"
+    for idx, width in enumerate([28, 20, 25, 18, 18, 22, 13, 18, 20, 18, 17, 46], start=1):
+        ws_actual.column_dimensions[chr(64 + idx)].width = width
+
+    firma_actual = ultima_acta.firma_docente if ultima_acta else None
+    persona_firma = (ultima_acta.docente_nombre if ultima_acta else None) or (lev.responsable.nombre if lev.responsable else None)
+    fila_firma_actual = fila_actual + 3
+    _insertar_firma_excel(
+        ws_actual,
+        firma_actual,
+        fila_firma_actual,
+        "FIRMA DEL DOCENTE / RESPONSABLE - ULTIMA DEVOLUCION REGISTRADA",
+        persona_firma,
+        fecha_firma_actual,
+    )
+    ws_actual.sheet_properties.pageSetUpPr.fitToPage = True
+    ws_actual.page_setup.fitToWidth = 1
+    ws_actual.page_setup.fitToHeight = 0
+
+    # Las actas firmadas originales se conservan como historial inmutable. La
+    # primera hoja siempre contiene los datos actuales al momento de la descarga.
+    for numero, acta in enumerate(actas, start=1):
+        ws = wb.create_sheet(title=f"Historico {numero:02d}"[:31])
+        _estilizar_hoja_excel(
+            ws,
+            f"HISTORICO - ACTA DE DEVOLUCION #{numero}",
+            lev,
+            "Copia de los datos guardados al firmar esta devolucion.",
+        )
+        ws.merge_cells("A6:L6")
+        ws["A6"] = (
+            "HISTORICO DE FIRMA: esta hoja conserva los valores registrados al momento de firmar esta acta. "
+            "Para consultar cantidades y observaciones vigentes, abre la primera hoja: Estado actual."
+        )
+        ws["A6"].font = Font(bold=True, color="44546A")
+        ws["A6"].alignment = Alignment(wrap_text=True, vertical="center")
+        ws.row_dimensions[6].height = 36
+        fecha_acta = acta.created_at
+        registrado_por = acta.registrado_por or "-"
+        docente_nombre = acta.docente_nombre or "-"
+        resumen_acta = acta.detalles_resumen or []
+        total_entregadas = acta.total_entregadas
+        total_recibidas = acta.total_recibidas
+        total_nuevas = acta.total_nuevas
+        total_faltantes = acta.total_faltantes
+        ws["A5"] = "Fecha de devolucion"
+        ws["B5"] = fecha_acta.strftime("%d/%m/%Y %H:%M") if fecha_acta else "-"
+        ws["D5"] = "Recibio / registro"
         ws["E5"] = registrado_por
         ws["G5"] = "Docente que entrega"
         ws["H5"] = docente_nombre
-        if nota_historica:
-            ws.merge_cells("A6:L6")
-            ws["A6"] = nota_historica
-            ws["A6"].font = Font(bold=True, color="9C6500")
-            ws["A6"].alignment = Alignment(wrap_text=True, vertical="center")
-            ws.row_dimensions[6].height = 42
-        columnas = ["Elemento", "Categoría", "Referencia", "Marca", "Modelo", "Serial", "Entregadas", "Recibidas en esta acta", "Nuevas en esta acta", "Faltantes pendientes", "Estado físico", "Observación"]
-        fila_header = 7
+        columnas = [
+            "Elemento", "Categoria", "Referencia", "Marca", "Modelo", "Serial",
+            "Entregadas", "Recibidas en esta acta", "Nuevas en esta acta",
+            "Faltantes pendientes", "Estado fisico", "Observacion",
+        ]
+        fila_header = 8
         _estilizar_encabezado(ws, fila_header, columnas)
         fila = fila_header + 1
         for dato in resumen_acta:
@@ -1611,14 +1743,16 @@ def descargar_excel_devolucion(
         ws.cell(fila, 10, total_faltantes).font = Font(bold=True)
         ws.auto_filter.ref = f"A{fila_header}:L{max(fila - 1, fila_header)}"
         ws.freeze_panes = f"A{fila_header + 1}"
-        widths = [28, 20, 25, 18, 18, 22, 13, 21, 18, 20, 17, 42]
-        for idx, width in enumerate(widths, start=1):
-            ws.column_dimensions[chr(64 + idx) if idx <= 26 else "A"].width = width
-        firma_row = fila + 3
+        for idx, width in enumerate([28, 20, 25, 18, 18, 22, 13, 21, 18, 20, 17, 42], start=1):
+            ws.column_dimensions[chr(64 + idx)].width = width
+        fila_firma = fila + 3
         _insertar_firma_excel(
-            ws, firma_docente, firma_row,
-            "FIRMA DEL DOCENTE / RESPONSABLE — DEVOLUCIÓN",
-            docente_nombre, fecha_acta,
+            ws,
+            acta.firma_docente,
+            fila_firma,
+            "FIRMA DEL DOCENTE / RESPONSABLE - DEVOLUCION HISTORICA",
+            docente_nombre,
+            fecha_acta,
         )
         ws.sheet_properties.pageSetUpPr.fitToPage = True
         ws.page_setup.fitToWidth = 1
