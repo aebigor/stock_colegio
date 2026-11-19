@@ -12,3 +12,4 @@ from app.modules.ubicaciones.model import *
 from app.modules.personas.model import *
 from app.modules.activos.movimiento_model import *
 from app.modules.mantenimientos.model import *
+from app.modules.activos.levantamiento_model import *

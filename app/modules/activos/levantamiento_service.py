@@ -2,8 +2,8 @@ from datetime import datetime, timezone
 from secrets import token_urlsafe
 import re
 import unicodedata
-from sqlalchemy.orm import Session, joinedload
-from .levantamiento_model import LevantamientoInventario, LevantamientoDetalle
+from sqlalchemy.orm import Session, joinedload, selectinload
+from .levantamiento_model import LevantamientoInventario, LevantamientoDetalle, LevantamientoDevolucion
 from .model import Activo
 from .movimiento_model import Movimiento
 from app.modules.categorias.model import Categoria
@@ -88,6 +88,7 @@ class LevantamientoService:
             joinedload(LevantamientoInventario.responsable),
             joinedload(LevantamientoInventario.creador),
             joinedload(LevantamientoInventario.aprobador),
+            selectinload(LevantamientoInventario.devoluciones),
         )
         if area != "Todas":
             q = q.filter(LevantamientoInventario.area == area)
@@ -101,6 +102,7 @@ class LevantamientoService:
             joinedload(LevantamientoInventario.aprobador),
             joinedload(LevantamientoInventario.detalles).joinedload(LevantamientoDetalle.activo),
             joinedload(LevantamientoInventario.detalles).joinedload(LevantamientoDetalle.categoria),
+            selectinload(LevantamientoInventario.devoluciones),
         ).filter(LevantamientoInventario.id == levantamiento_id)
         if area != "Todas":
             q = q.filter(LevantamientoInventario.area == area)
@@ -973,7 +975,7 @@ class LevantamientoService:
         self.db.commit()
         return {"creados": creados, "entregados": entregados}
 
-    def devolver_todo(self, levantamiento_id, usuario):
+    def devolver_todo(self, levantamiento_id, usuario, firma_docente):
         lev = self.db.query(LevantamientoInventario).options(
             joinedload(LevantamientoInventario.detalles)
         ).filter(LevantamientoInventario.id == levantamiento_id).first()
@@ -981,8 +983,16 @@ class LevantamientoService:
             raise ValueError("Solo se puede registrar la devolución de un levantamiento aprobado o con devolución parcial.")
         if not lev.responsable_id:
             raise ValueError("El levantamiento no tiene responsable.")
+        firma_docente = (firma_docente or "").strip()
+        if not firma_docente.startswith("data:image/") or ";base64," not in firma_docente:
+            raise ValueError("El docente debe firmar la devolución antes de registrarla.")
+        if len(firma_docente) > 5_000_000:
+            raise ValueError("La firma es demasiado grande. Limpia el recuadro y vuelve a firmar.")
 
-        pendientes_revision = [d for d in lev.detalles if not getattr(d, "revisado_devolucion", False)]
+        pendientes_revision = [
+            d for d in lev.detalles
+            if not getattr(d, "alta_logistica", False) and not getattr(d, "revisado_devolucion", False)
+        ]
         if pendientes_revision:
             raise ValueError(
                 "Debes guardar la cantidad y observación de todos los grupos antes de registrar la devolución. "
@@ -1268,6 +1278,47 @@ class LevantamientoService:
                 creados_antes += 1
                 siguiente += 1
 
+        # Guardar un acta independiente por cada devolución firmada. Esto conserva
+        # firmas y cantidades de devoluciones parciales sucesivas sin sobrescribirlas.
+        ultima_acta = self.db.query(LevantamientoDevolucion).filter(
+            LevantamientoDevolucion.empresa_id == lev.empresa_id,
+            LevantamientoDevolucion.levantamiento_id == lev.id,
+        ).order_by(LevantamientoDevolucion.id.desc()).first()
+        anteriores_por_detalle = {
+            int(fila.get("detalle_id")): fila
+            for fila in (ultima_acta.detalles_resumen if ultima_acta and ultima_acta.detalles_resumen else [])
+            if fila.get("detalle_id") is not None
+        }
+        detalle_acta = []
+        for detalle in sorted(lev.detalles, key=lambda d: d.id):
+            if getattr(detalle, "alta_logistica", False):
+                continue
+            entregadas_detalle = cantidad_entregada_detalle(detalle)
+            if entregadas_detalle <= 0:
+                continue
+            anterior = anteriores_por_detalle.get(detalle.id, {})
+            devueltas_acumuladas = cantidad_devuelta_detalle(detalle)
+            sobrantes_acumulados = cantidad_sobrante_detalle(detalle)
+            devueltas_esta_acta = max(0, devueltas_acumuladas - int(anterior.get("devueltas_acumuladas", 0) or 0))
+            sobrantes_esta_acta = max(0, sobrantes_acumulados - int(anterior.get("sobrantes_acumulados", 0) or 0))
+            detalle_acta.append({
+                "detalle_id": detalle.id,
+                "nombre": detalle.nombre,
+                "categoria": detalle.categoria.nombre if detalle.categoria else "",
+                "referencia": detalle.referencia or "",
+                "serial": detalle.serial or "",
+                "marca": detalle.marca or "",
+                "modelo": detalle.modelo or "",
+                "cantidad_entregada": entregadas_detalle,
+                "devueltas_esta_acta": devueltas_esta_acta,
+                "devueltas_acumuladas": devueltas_acumuladas,
+                "nuevas_esta_acta": sobrantes_esta_acta,
+                "sobrantes_acumulados": sobrantes_acumulados,
+                "faltantes_pendientes": max(0, entregadas_detalle - devueltas_acumuladas),
+                "estado_fisico": detalle.estado_fisico or "",
+                "observacion": detalle.observacion_devolucion or "",
+            })
+
         # Lo que no fue recibido conserva su responsable y estado Prestado.
         pendientes = self.db.query(Activo).filter(
             Activo.empresa_id == lev.empresa_id,
@@ -1277,6 +1328,23 @@ class LevantamientoService:
             Activo.estado == "Prestado",
         ).count()
         lev.estado = "Devuelto parcialmente" if pendientes else "Devuelto"
+        total_entregadas_acta = sum(f["cantidad_entregada"] for f in detalle_acta)
+        total_recibidas_acta = sum(f["devueltas_esta_acta"] for f in detalle_acta)
+        total_nuevas_acta = sum(f["nuevas_esta_acta"] for f in detalle_acta)
+        total_faltantes_pendientes = sum(f["faltantes_pendientes"] for f in detalle_acta)
+        self.db.add(LevantamientoDevolucion(
+            empresa_id=lev.empresa_id,
+            levantamiento_id=lev.id,
+            area=lev.area,
+            firma_docente=firma_docente,
+            docente_nombre=lev.responsable.nombre if lev.responsable else None,
+            registrado_por=usuario,
+            total_entregadas=total_entregadas_acta,
+            total_recibidas=total_recibidas_acta,
+            total_nuevas=total_nuevas_acta,
+            total_faltantes=total_faltantes_pendientes,
+            detalles_resumen=detalle_acta,
+        ))
         self.db.commit()
         return {"devueltos": devueltos, "pendientes": pendientes, "estado": lev.estado}
 

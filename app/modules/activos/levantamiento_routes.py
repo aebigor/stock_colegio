@@ -1,9 +1,13 @@
 import re
+import base64
+import unicodedata
 from datetime import datetime, timezone
 from io import BytesIO
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from openpyxl import load_workbook
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from openpyxl import load_workbook, Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.drawing.image import Image as XLImage
 import pdfplumber
 from sqlalchemy.orm import Session
 
@@ -22,11 +26,93 @@ from .levantamiento_service import (
     calcular_diferencias_cantidad,
 )
 from .model import Activo
-from .levantamiento_model import LevantamientoDetalle
+from .levantamiento_model import LevantamientoDetalle, LevantamientoDevolucion
 from app.modules.categorias.model import Categoria
 
 router = APIRouter(prefix="/activos/inventario-fisico", tags=["Inventario físico"], dependencies=[Depends(get_current_user)])
 public_router = APIRouter(prefix="/inventario-fisico-publico", tags=["Inventario físico público"])
+
+
+def _nombre_archivo_excel(valor: str) -> str:
+    texto = unicodedata.normalize("NFKD", str(valor or "inventario"))
+    texto = "".join(c for c in texto if not unicodedata.combining(c))
+    texto = re.sub(r"[^A-Za-z0-9_-]+", "_", texto).strip("_")
+    return (texto or "inventario")[:60]
+
+
+def _estilizar_hoja_excel(ws, titulo: str, lev, subtitulo: str):
+    ws.sheet_view.showGridLines = False
+    ws.merge_cells("A1:L1")
+    celda = ws["A1"]
+    celda.value = titulo
+    celda.font = Font(name="Calibri", size=16, bold=True, color="FFFFFF")
+    celda.fill = PatternFill("solid", fgColor="17365D")
+    celda.alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[1].height = 28
+    ws.merge_cells("A2:L2")
+    ws["A2"] = subtitulo
+    ws["A2"].font = Font(name="Calibri", size=10, italic=True, color="44546A")
+    ws["A3"] = "Ubicación"
+    ws["B3"] = lev.ubicacion.nombre if lev.ubicacion else "—"
+    ws["D3"] = "Área"
+    ws["E3"] = lev.area or "—"
+    ws["G3"] = "Responsable"
+    ws["H3"] = lev.responsable.nombre if lev.responsable else "—"
+    ws["A4"] = "Levantamiento"
+    ws["B4"] = f"#{lev.id}"
+    ws["D4"] = "Empresa ID"
+    ws["E4"] = lev.empresa_id
+    ws["G4"] = "Fecha"
+    ws["H4"] = (lev.created_at.strftime("%d/%m/%Y %H:%M") if lev.created_at else "—")
+    for row in (3, 4):
+        for cell in ws[row]:
+            if cell.column in (1, 4, 7):
+                cell.font = Font(bold=True, color="17365D")
+            cell.alignment = Alignment(vertical="center", wrap_text=True)
+    ws.row_dimensions[3].height = 22
+    ws.row_dimensions[4].height = 22
+
+
+def _estilizar_encabezado(ws, fila: int, columnas: list[str]):
+    borde = Side(style="thin", color="D9E2F3")
+    for idx, nombre in enumerate(columnas, start=1):
+        c = ws.cell(fila, idx, nombre)
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="1F4E78")
+        c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        c.border = Border(bottom=borde)
+    ws.row_dimensions[fila].height = 32
+
+
+def _insertar_firma_excel(ws, firma_data_uri: str | None, fila: int, etiqueta: str, persona: str | None, fecha):
+    ws.cell(fila, 1, etiqueta).font = Font(bold=True, color="17365D", size=11)
+    ws.cell(fila + 1, 1, persona or "Docente / responsable").font = Font(italic=True, color="44546A")
+    if fecha:
+        ws.cell(fila + 2, 1, fecha.strftime("%d/%m/%Y %H:%M") if hasattr(fecha, "strftime") else str(fecha))
+    if firma_data_uri and ";base64," in firma_data_uri:
+        try:
+            payload = firma_data_uri.split(",", 1)[1]
+            imagen = XLImage(BytesIO(base64.b64decode(payload, validate=True)))
+            factor = min(1.0, 340 / max(imagen.width, 1), 100 / max(imagen.height, 1))
+            imagen.width = int(imagen.width * factor)
+            imagen.height = int(imagen.height * factor)
+            ws.add_image(imagen, f"A{fila + 3}")
+            ws.row_dimensions[fila + 3].height = 78
+        except Exception:
+            ws.cell(fila + 3, 1, "Firma digital registrada; no se pudo insertar la imagen en este Excel.")
+    else:
+        ws.cell(fila + 3, 1, "No hay imagen de firma registrada.")
+
+
+def _respuesta_excel(wb: Workbook, filename: str):
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def _nombre_usuario(user: Usuario) -> str:
@@ -689,6 +775,7 @@ def index(request: Request, levantamiento_id: int | None = None, db: Session = D
             "levantamiento": levantamiento,
             "grupos_detalles": _agrupar_detalles_vista(levantamiento.detalles) if levantamiento else [],
             "grupos_devolucion": _agrupar_detalles_devolucion(levantamiento.detalles) if levantamiento else [],
+            "ultima_devolucion": (levantamiento.devoluciones[-1] if levantamiento and levantamiento.devoluciones else None),
             "ubicaciones": ubicaciones,
             "personas": personas,
             "categorias": categorias,
@@ -1272,13 +1359,159 @@ def aprobar(levantamiento_id: int, db: Session = Depends(get_db), user: Usuario 
 
 
 @router.post("/{levantamiento_id}/devolver-todo")
-def devolver_todo(levantamiento_id: int, db: Session = Depends(get_db), user: Usuario = Depends(require_roles("Super Admin", "Superadministrador", "Administrador de Logística", "Admin de Logística"))):
+def devolver_todo(
+    levantamiento_id: int,
+    firma_docente: str = Form(""),
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(require_roles("Super Admin", "Superadministrador", "Administrador de Logística", "Admin de Logística")),
+):
     area = user_area(user)
     lev = LevantamientoService(db).obtener(levantamiento_id, area)
     if not lev:
         raise HTTPException(status_code=404, detail="Levantamiento no encontrado en tu área.")
     try:
-        devueltos = LevantamientoService(db).devolver_todo(levantamiento_id, _nombre_usuario(user))
+        LevantamientoService(db).devolver_todo(
+            levantamiento_id,
+            _nombre_usuario(user),
+            firma_docente=firma_docente,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return RedirectResponse(url=f"/activos/inventario-fisico/?levantamiento_id={levantamiento_id}", status_code=303)
+
+
+@router.get("/{levantamiento_id}/excel/entrega")
+def descargar_excel_entrega(
+    levantamiento_id: int,
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(get_current_user),
+):
+    area = user_area(user)
+    lev = LevantamientoService(db).obtener(levantamiento_id, area)
+    if not lev:
+        raise HTTPException(status_code=404, detail="Levantamiento no encontrado en tu área.")
+    if not lev.firma:
+        raise HTTPException(status_code=409, detail="Este levantamiento todavía no tiene firma de entrega del docente.")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Entrega"
+    fecha = lev.enviado_at or lev.aprobado_at or lev.created_at
+    _estilizar_hoja_excel(ws, "ACTA DE ENTREGA DE INVENTARIO", lev, "Constancia de los elementos revisados y entregados al responsable.")
+    ws["A5"] = "Fecha de firma"
+    ws["B5"] = fecha.strftime("%d/%m/%Y %H:%M") if fecha else "—"
+    ws["D5"] = "Aprobado por"
+    ws["E5"] = (
+        " ".join(x for x in [getattr(lev.aprobador, "nombre", ""), getattr(lev.aprobador, "apellido", "")] if x).strip()
+        if lev.aprobador else "—"
+    )
+    columnas = ["Elemento", "Categoría", "Referencia / rango", "Cantidad sistema", "Cantidad entregada", "Marca", "Modelo", "Serial", "Estado físico", "Observación del docente"]
+    fila_header = 7
+    _estilizar_encabezado(ws, fila_header, columnas)
+    detalles = [d for d in lev.detalles if not getattr(d, "alta_logistica", False)]
+    grupos = _agrupar_detalles_vista(detalles)
+    fila = fila_header + 1
+    total = 0
+    for g in grupos:
+        grupo_detalles = g.get("detalles", [])
+        primero = grupo_detalles[0] if grupo_detalles else None
+        seriales = ", ".join(sorted({d.serial for d in grupo_detalles if d.serial}))
+        valores = [
+            g.get("nombre", ""),
+            g["categoria"].nombre if g.get("categoria") else "",
+            g.get("referencia_rango", "—"),
+            g.get("cantidad_sistema", 0),
+            sum(cantidad_entregada_detalle(d) for d in grupo_detalles),
+            getattr(primero, "marca", "") or "",
+            getattr(primero, "modelo", "") or "",
+            seriales,
+            g.get("estado_fisico", ""),
+            g.get("observacion", "") or "",
+        ]
+        total += int(valores[4] or 0)
+        for col, valor in enumerate(valores, start=1):
+            ws.cell(fila, col, valor)
+            ws.cell(fila, col).alignment = Alignment(vertical="top", wrap_text=True)
+        fila += 1
+    ws.cell(fila, 1, "TOTAL DE UNIDADES ENTREGADAS").font = Font(bold=True)
+    ws.cell(fila, 5, total).font = Font(bold=True)
+    ws.auto_filter.ref = f"A{fila_header}:J{max(fila - 1, fila_header)}"
+    ws.freeze_panes = f"A{fila_header + 1}"
+    widths = [30, 22, 30, 16, 18, 18, 18, 24, 18, 42]
+    for idx, width in enumerate(widths, start=1):
+        ws.column_dimensions[chr(64 + idx)].width = width
+    firma_row = fila + 3
+    _insertar_firma_excel(ws, lev.firma, firma_row, "FIRMA DEL DOCENTE / RESPONSABLE — ENTREGA", lev.responsable.nombre if lev.responsable else None, fecha)
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    filename = f"entrega_{_nombre_archivo_excel(lev.ubicacion.nombre if lev.ubicacion else 'ubicacion')}_levantamiento_{lev.id}.xlsx"
+    return _respuesta_excel(wb, filename)
+
+
+@router.get("/{levantamiento_id}/excel/devolucion")
+def descargar_excel_devolucion(
+    levantamiento_id: int,
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(get_current_user),
+):
+    area = user_area(user)
+    lev = LevantamientoService(db).obtener(levantamiento_id, area)
+    if not lev:
+        raise HTTPException(status_code=404, detail="Levantamiento no encontrado en tu área.")
+    actas = db.query(LevantamientoDevolucion).filter(
+        LevantamientoDevolucion.empresa_id == lev.empresa_id,
+        LevantamientoDevolucion.levantamiento_id == lev.id,
+    ).order_by(LevantamientoDevolucion.created_at.asc(), LevantamientoDevolucion.id.asc()).all()
+    if not actas:
+        raise HTTPException(status_code=409, detail="Este levantamiento todavía no tiene una devolución firmada.")
+
+    wb = Workbook()
+    wb.remove(wb.active)
+    for numero, acta in enumerate(actas, start=1):
+        ws = wb.create_sheet(title=f"Devolucion {numero:02d}"[:31])
+        _estilizar_hoja_excel(ws, f"ACTA DE DEVOLUCIÓN #{numero}", lev, "Constancia firmada de los elementos recibidos de vuelta.")
+        ws["A5"] = "Fecha de devolución"
+        ws["B5"] = acta.created_at.strftime("%d/%m/%Y %H:%M") if acta.created_at else "—"
+        ws["D5"] = "Recibió / registró"
+        ws["E5"] = acta.registrado_por or "—"
+        ws["G5"] = "Docente que entrega"
+        ws["H5"] = acta.docente_nombre or "—"
+        columnas = ["Elemento", "Categoría", "Referencia", "Marca", "Modelo", "Serial", "Entregadas", "Recibidas en esta acta", "Nuevas en esta acta", "Faltantes pendientes", "Estado físico", "Observación"]
+        fila_header = 7
+        _estilizar_encabezado(ws, fila_header, columnas)
+        fila = fila_header + 1
+        for dato in (acta.detalles_resumen or []):
+            valores = [
+                dato.get("nombre", ""), dato.get("categoria", ""), dato.get("referencia", ""),
+                dato.get("marca", ""), dato.get("modelo", ""), dato.get("serial", ""),
+                dato.get("cantidad_entregada", 0), dato.get("devueltas_esta_acta", 0),
+                dato.get("nuevas_esta_acta", 0), dato.get("faltantes_pendientes", 0),
+                dato.get("estado_fisico", ""), dato.get("observacion", ""),
+            ]
+            for col, valor in enumerate(valores, start=1):
+                ws.cell(fila, col, valor)
+                ws.cell(fila, col).alignment = Alignment(vertical="top", wrap_text=True)
+            fila += 1
+        ws.cell(fila, 1, "TOTALES DEL ACTA").font = Font(bold=True)
+        ws.cell(fila, 7, acta.total_entregadas).font = Font(bold=True)
+        ws.cell(fila, 8, acta.total_recibidas).font = Font(bold=True)
+        ws.cell(fila, 9, acta.total_nuevas).font = Font(bold=True)
+        ws.cell(fila, 10, acta.total_faltantes).font = Font(bold=True)
+        ws.auto_filter.ref = f"A{fila_header}:L{max(fila - 1, fila_header)}"
+        ws.freeze_panes = f"A{fila_header + 1}"
+        widths = [28, 20, 25, 18, 18, 22, 13, 21, 18, 20, 17, 42]
+        for idx, width in enumerate(widths, start=1):
+            ws.column_dimensions[chr(64 + idx) if idx <= 26 else "A"].width = width
+        firma_row = fila + 3
+        _insertar_firma_excel(
+            ws, acta.firma_docente, firma_row,
+            "FIRMA DEL DOCENTE / RESPONSABLE — DEVOLUCIÓN",
+            acta.docente_nombre, acta.created_at,
+        )
+        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 0
+
+    filename = f"devoluciones_{_nombre_archivo_excel(lev.ubicacion.nombre if lev.ubicacion else 'ubicacion')}_levantamiento_{lev.id}.xlsx"
+    return _respuesta_excel(wb, filename)

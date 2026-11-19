@@ -71,6 +71,12 @@
           {% else %}
             <a class="btn btn-sm btn-outline-primary" href="/activos/inventario-fisico/?levantamiento_id={{ item.id }}">{{ 'Ver' if item.estado != 'Borrador' else 'Abrir' }}</a>
           {% endif %}
+          {% if item.firma %}
+            <a class="btn btn-sm btn-outline-success mt-1" href="/activos/inventario-fisico/{{ item.id }}/excel/entrega" title="Descargar el acta de entrega con firma del docente"><i class="bi bi-file-earmark-excel"></i> Excel entrega</a>
+          {% endif %}
+          {% if item.devoluciones %}
+            <a class="btn btn-sm btn-outline-info mt-1" href="/activos/inventario-fisico/{{ item.id }}/excel/devolucion" title="Descargar las actas de devolución con sus firmas"><i class="bi bi-file-earmark-excel"></i> Excel devolución</a>
+          {% endif %}
           {% if item.estado == 'Borrador' and (es_logistica or item.creado_por == current_user_id|default(-1)) %}
             <form method="post" action="/activos/inventario-fisico/{{ item.id }}/eliminar" style="display:inline" onsubmit="return confirm('¿Eliminar este levantamiento de prueba? Solo se borrará el borrador y sus detalles; no se eliminarán activos del inventario.')">
               <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Eliminar</button>
@@ -351,11 +357,27 @@
           </tbody>
         </table>
       </div>
+      {% if ultima_devolucion %}
+        <div class="physical-card mt-3">
+          <h3 class="card-title"><i class="bi bi-pen"></i> Firma de la devolución</h3>
+          <p class="help">Firmó {{ ultima_devolucion.docente_nombre or (levantamiento.responsable.nombre if levantamiento.responsable else 'Docente / responsable') }} el {{ ultima_devolucion.created_at.strftime('%d/%m/%Y %H:%M') if ultima_devolucion.created_at else '—' }}. Registró: {{ ultima_devolucion.registrado_por }}.</p>
+          <img src="{{ ultima_devolucion.firma_docente }}" alt="Firma del docente al devolver" style="display:block;max-width:420px;width:100%;height:150px;object-fit:contain;background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:8px">
+        </div>
+      {% endif %}
       {% set detalles_para_devolver = levantamiento.detalles|rejectattr('alta_logistica')|list %}
       {% set devolucion_lista = detalles_para_devolver|length > 0 and (detalles_para_devolver|selectattr('revisado_devolucion')|list|length == detalles_para_devolver|length) %}
       {% if levantamiento.estado != 'Devuelto' and es_logistica|default(false) %}
-        <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/devolver-todo" id="register-return-form" onsubmit="return confirm('¿Registrar la devolución? Los faltantes seguirán prestados y las unidades nuevas se crearán disponibles en la bodega.')">
-          <button id="register-return-button" class="btn btn-warning" {% if not devolucion_lista %}disabled title="Guarda la cantidad y observación de todos los grupos para habilitar la devolución"{% endif %}><i class="bi bi-box-arrow-in-down"></i> {% if levantamiento.estado == 'Devuelto parcialmente' %}Actualizar devolución{% else %}Registrar devolución{% endif %}</button>
+        <div class="physical-card mt-3" id="return-teacher-signature-card">
+          <h3 class="card-title"><i class="bi bi-pen"></i> Firma del docente al devolver</h3>
+          <p class="help">El docente / responsable debe firmar para dejar constancia de los elementos que está entregando en esta devolución. Cada devolución parcial guarda su propia firma y acta.</p>
+          <div style="border:2px dashed #64748b;border-radius:12px;background:#fff;padding:8px;max-width:760px">
+            <canvas id="firma-devolucion-canvas" width="1000" height="220" style="width:100%;height:190px;display:block;touch-action:none"></canvas>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="limpiarFirmaDevolucion()"><i class="bi bi-eraser"></i> Limpiar firma</button>
+        </div>
+        <form method="post" action="/activos/inventario-fisico/{{ levantamiento.id }}/devolver-todo" id="register-return-form" onsubmit="return prepararFirmaDevolucion(event)" >
+          <input type="hidden" name="firma_docente" id="firma-devolucion-input">
+          <button id="register-return-button" class="btn btn-warning" {% if not devolucion_lista %}disabled title="Guarda la cantidad y observación de todos los grupos para habilitar la devolución"{% endif %}><i class="bi bi-box-arrow-in-down"></i> {% if levantamiento.estado == 'Devuelto parcialmente' %}Registrar devolución parcial{% else %}Registrar devolución{% endif %}</button>
           <small id="return-review-hint" class="d-block mt-2">{% if not devolucion_lista %}Guarda la cantidad y observación de todos los grupos primero.{% elif resumen_devolucion.faltantes > 0 or resumen_devolucion.nuevas > 0 %}Se registrarán {{ resumen_devolucion.recibidas }} unidades originales recibidas, {{ resumen_devolucion.nuevas }} nuevas y {{ resumen_devolucion.faltantes }} faltantes; los faltantes seguirán prestados.{% else %}Todos los grupos están guardados y listos para registrar la devolución.{% endif %}</small>
         </form>
       {% endif %}
@@ -367,5 +389,83 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/inventario_fisico.js?v=20261117-3" defer></script>
+<script src="/static/js/inventario_fisico.js?v=20261119-return-signature-1" defer></script>
+<script>
+(function () {
+  const canvas = document.getElementById('firma-devolucion-canvas');
+  const form = document.getElementById('register-return-form');
+  if (!canvas || !form) return;
+  const ctx = canvas.getContext('2d');
+  let dibujando = false;
+  let tieneFirma = false;
+
+  function punto(event) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (event.clientX - rect.left) * (canvas.width / rect.width),
+      y: (event.clientY - rect.top) * (canvas.height / rect.height),
+    };
+  }
+
+  function fondoBlanco() {
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+
+  function limpiarFirmaDevolucion() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    fondoBlanco();
+    tieneFirma = false;
+  }
+
+  function comenzar(event) {
+    event.preventDefault();
+    dibujando = true;
+    canvas.setPointerCapture?.(event.pointerId);
+    const p = punto(event);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#0f172a';
+  }
+
+  function trazar(event) {
+    if (!dibujando) return;
+    event.preventDefault();
+    const p = punto(event);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    tieneFirma = true;
+  }
+
+  function terminar(event) {
+    if (!dibujando) return;
+    event.preventDefault();
+    dibujando = false;
+    ctx.closePath();
+  }
+
+  canvas.addEventListener('pointerdown', comenzar);
+  canvas.addEventListener('pointermove', trazar);
+  canvas.addEventListener('pointerup', terminar);
+  canvas.addEventListener('pointercancel', terminar);
+  canvas.addEventListener('pointerleave', terminar);
+  fondoBlanco();
+
+  window.limpiarFirmaDevolucion = limpiarFirmaDevolucion;
+  window.prepararFirmaDevolucion = function (event) {
+    if (!tieneFirma) {
+      event.preventDefault();
+      alert('El docente debe firmar la devolución antes de registrarla.');
+      return false;
+    }
+    document.getElementById('firma-devolucion-input').value = canvas.toDataURL('image/png');
+    return confirm('¿Confirmas que el docente ha firmado la devolución y que deseas registrar los artículos recibidos?');
+  };
+})();
+</script>
 {% endblock %}

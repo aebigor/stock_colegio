@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, JSON, func
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 from app.core.tenancy import TenantScoped
@@ -28,6 +28,7 @@ class LevantamientoInventario(TenantScoped, Base):
     creador = relationship("Usuario", foreign_keys=[creado_por])
     aprobador = relationship("Usuario", foreign_keys=[aprobado_por])
     detalles = relationship("LevantamientoDetalle", back_populates="levantamiento", cascade="all, delete-orphan")
+    devoluciones = relationship("LevantamientoDevolucion", back_populates="levantamiento", cascade="all, delete-orphan", order_by="LevantamientoDevolucion.id")
 
 
 class LevantamientoDetalle(TenantScoped, Base):
@@ -69,3 +70,29 @@ class LevantamientoDetalle(TenantScoped, Base):
     levantamiento = relationship("LevantamientoInventario", back_populates="detalles")
     activo = relationship("Activo")
     categoria = relationship("Categoria")
+
+
+class LevantamientoDevolucion(TenantScoped, Base):
+    """Acta firmada de una devolución (permite conservar firmas de devoluciones parciales)."""
+
+    __tablename__ = "levantamientos_inventario_devoluciones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    levantamiento_id = Column(
+        Integer,
+        ForeignKey("levantamientos_inventario.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    area = Column(String(50), nullable=False, default="Medios", index=True)
+    firma_docente = Column(Text, nullable=False)
+    docente_nombre = Column(String(180), nullable=True)
+    registrado_por = Column(String(120), nullable=False)
+    total_entregadas = Column(Integer, nullable=False, default=0, server_default="0")
+    total_recibidas = Column(Integer, nullable=False, default=0, server_default="0")
+    total_nuevas = Column(Integer, nullable=False, default=0, server_default="0")
+    total_faltantes = Column(Integer, nullable=False, default=0, server_default="0")
+    detalles_resumen = Column(JSON, nullable=False, default=list)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    levantamiento = relationship("LevantamientoInventario", back_populates="devoluciones")
