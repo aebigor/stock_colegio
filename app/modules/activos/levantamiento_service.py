@@ -1470,7 +1470,11 @@ class LevantamientoService:
             Activo.responsable_id == lev.responsable_id,
             Activo.estado == "Prestado",
         ).count()
-        lev.estado = "Devuelto parcialmente" if pendientes else "Devuelto"
+        # El acta de devolución es el cierre del proceso de recepción.
+        # Si quedan faltantes, los activos conservan su estado Prestado y la
+        # novedad queda registrada; pero el levantamiento se cierra para impedir
+        # que se registren devoluciones repetidas sobre la misma acta.
+        lev.estado = "Devuelto"
         total_entregadas_acta = sum(f["cantidad_entregada"] for f in detalle_acta)
         total_recibidas_acta = sum(f["devueltas_esta_acta"] for f in detalle_acta)
         total_nuevas_acta = sum(f["nuevas_esta_acta"] for f in detalle_acta)

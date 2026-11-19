@@ -74,8 +74,13 @@
           {% if item.firma %}
             <a class="btn btn-sm btn-outline-success mt-1" href="/activos/inventario-fisico/{{ item.id }}/excel/entrega" title="Descargar el acta de entrega con firma del docente"><i class="bi bi-file-earmark-excel"></i> Excel entrega</a>
           {% endif %}
-          {% if item.devoluciones %}
-            <a class="btn btn-sm btn-outline-info mt-1" href="/activos/inventario-fisico/{{ item.id }}/excel/devolucion" title="Descargar las actas de devolución con sus firmas"><i class="bi bi-file-earmark-excel"></i> Excel devolución</a>
+          {% if item.devoluciones or item.estado in ['Devuelto', 'Devuelto parcialmente'] %}
+            <a class="btn btn-sm btn-outline-info mt-1" href="/activos/inventario-fisico/{{ item.id }}/excel/devolucion" title="Descargar el acta de devolución y sus firmas, si están almacenadas"><i class="bi bi-file-earmark-excel"></i> Excel devolución</a>
+          {% endif %}
+          {% if item.estado == 'Devuelto parcialmente' and es_logistica|default(false) %}
+            <form method="post" action="/activos/inventario-fisico/{{ item.id }}/cerrar-devolucion" class="d-inline" onsubmit="return confirm('¿Cerrar esta devolución? Los activos faltantes permanecerán prestados al responsable y el levantamiento quedará bloqueado para nuevas devoluciones.');">
+              <button class="btn btn-sm btn-outline-warning mt-1"><i class="bi bi-lock"></i> Cerrar devolución</button>
+            </form>
           {% endif %}
           {% if item.estado == 'Borrador' and (es_logistica or item.creado_por == current_user_id|default(-1)) %}
             <form method="post" action="/activos/inventario-fisico/{{ item.id }}/eliminar" style="display:inline" onsubmit="return confirm('¿Eliminar este levantamiento de prueba? Solo se borrará el borrador y sus detalles; no se eliminarán activos del inventario.')">

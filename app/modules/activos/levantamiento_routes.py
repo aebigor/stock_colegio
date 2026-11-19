@@ -1393,6 +1393,32 @@ def devolver_todo(
     return RedirectResponse(url=f"/activos/inventario-fisico/?levantamiento_id={levantamiento_id}", status_code=303)
 
 
+@router.post("/{levantamiento_id}/cerrar-devolucion")
+def cerrar_devolucion_parcial(
+    levantamiento_id: int,
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(require_roles("Super Admin", "Superadministrador", "Administrador de Logística", "Admin de Logística")),
+):
+    """Cierra levantamientos parciales antiguos sin borrar faltantes ni movimientos."""
+    area = user_area(user)
+    lev = LevantamientoService(db).obtener(levantamiento_id, area)
+    if not lev:
+        raise HTTPException(status_code=404, detail="Levantamiento no encontrado en tu área.")
+    if lev.estado != "Devuelto parcialmente":
+        raise HTTPException(status_code=409, detail="Solo se pueden cerrar levantamientos con devolución parcial.")
+
+    usuario = _nombre_usuario(user)
+    marca_tiempo = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
+    nota = (
+        f"Devolución cerrada por {usuario} el {marca_tiempo}. "
+        "Los artículos faltantes permanecen prestados al responsable y conservan su novedad en movimientos."
+    )
+    lev.observaciones = f"{lev.observaciones or ''}\n{nota}".strip()
+    lev.estado = "Devuelto"
+    db.commit()
+    return RedirectResponse(url=f"/activos/inventario-fisico/?levantamiento_id={levantamiento_id}", status_code=303)
+
+
 @router.get("/{levantamiento_id}/excel/entrega")
 def descargar_excel_entrega(
     levantamiento_id: int,
@@ -1476,25 +1502,97 @@ def descargar_excel_devolucion(
         LevantamientoDevolucion.empresa_id == lev.empresa_id,
         LevantamientoDevolucion.levantamiento_id == lev.id,
     ).order_by(LevantamientoDevolucion.created_at.asc(), LevantamientoDevolucion.id.asc()).all()
-    if not actas:
-        raise HTTPException(status_code=409, detail="Este levantamiento todavía no tiene una devolución firmada.")
+    actas_exportar = list(actas)
+    if not actas_exportar:
+        if lev.estado not in {"Devuelto", "Devuelto parcialmente"}:
+            raise HTTPException(status_code=409, detail="Este levantamiento todavía no tiene una devolución registrada.")
+
+        # Compatibilidad con devoluciones históricas anteriores a la tabla de actas
+        # firmadas. Se exportan los datos disponibles sin inventar una firma.
+        detalles_historicos = []
+        for grupo in _agrupar_detalles_vista([d for d in lev.detalles if not getattr(d, "alta_logistica", False)]):
+            grupo_detalles = grupo.get("detalles", [])
+            entregadas = sum(cantidad_entregada_detalle(d) for d in grupo_detalles)
+            recibidas = sum(cantidad_devuelta_detalle(d) for d in grupo_detalles)
+            nuevas = sum(cantidad_sobrante_detalle(d) for d in grupo_detalles)
+            primero = grupo_detalles[0] if grupo_detalles else None
+            detalles_historicos.append({
+                "nombre": grupo.get("nombre", ""),
+                "categoria": grupo["categoria"].nombre if grupo.get("categoria") else "",
+                "referencia": grupo.get("referencia_rango", "—"),
+                "marca": getattr(primero, "marca", "") or "",
+                "modelo": getattr(primero, "modelo", "") or "",
+                "serial": ", ".join(sorted({d.serial for d in grupo_detalles if d.serial})),
+                "cantidad_entregada": entregadas,
+                "devueltas_esta_acta": recibidas,
+                "nuevas_esta_acta": nuevas,
+                "faltantes_pendientes": max(0, entregadas - recibidas),
+                "estado_fisico": grupo.get("estado_fisico", "") or "",
+                "observacion": next((d.observacion_devolucion for d in grupo_detalles if d.observacion_devolucion), "") or "",
+            })
+
+        fecha_historica = lev.updated_at or lev.aprobado_at or lev.created_at
+        actas_exportar = [{
+            "created_at": fecha_historica,
+            "registrado_por": "Registro histórico (sin acta de firma almacenada)",
+            "docente_nombre": lev.responsable.nombre if lev.responsable else "—",
+            "firma_docente": None,
+            "detalles_resumen": detalles_historicos,
+            "total_entregadas": sum(x["cantidad_entregada"] for x in detalles_historicos),
+            "total_recibidas": sum(x["devueltas_esta_acta"] for x in detalles_historicos),
+            "total_nuevas": sum(x["nuevas_esta_acta"] for x in detalles_historicos),
+            "total_faltantes": sum(x["faltantes_pendientes"] for x in detalles_historicos),
+            "nota_historica": (
+                "IMPORTANTE: esta devolución se registró antes de guardar actas firmadas. "
+                "No existe una imagen de firma de devolución almacenada para este registro histórico."
+            ),
+        }]
 
     wb = Workbook()
     wb.remove(wb.active)
-    for numero, acta in enumerate(actas, start=1):
+    for numero, acta in enumerate(actas_exportar, start=1):
         ws = wb.create_sheet(title=f"Devolucion {numero:02d}"[:31])
-        _estilizar_hoja_excel(ws, f"ACTA DE DEVOLUCIÓN #{numero}", lev, "Constancia firmada de los elementos recibidos de vuelta.")
+        _estilizar_hoja_excel(ws, f"ACTA DE DEVOLUCIÓN #{numero}", lev, "Constancia de los elementos recibidos de vuelta.")
+        if isinstance(acta, dict):
+            fecha_acta = acta.get("created_at")
+            registrado_por = acta.get("registrado_por") or "—"
+            docente_nombre = acta.get("docente_nombre") or "—"
+            resumen_acta = acta.get("detalles_resumen") or []
+            firma_docente = acta.get("firma_docente")
+            total_entregadas = acta.get("total_entregadas", 0)
+            total_recibidas = acta.get("total_recibidas", 0)
+            total_nuevas = acta.get("total_nuevas", 0)
+            total_faltantes = acta.get("total_faltantes", 0)
+            nota_historica = acta.get("nota_historica")
+        else:
+            fecha_acta = acta.created_at
+            registrado_por = acta.registrado_por or "—"
+            docente_nombre = acta.docente_nombre or "—"
+            resumen_acta = acta.detalles_resumen or []
+            firma_docente = acta.firma_docente
+            total_entregadas = acta.total_entregadas
+            total_recibidas = acta.total_recibidas
+            total_nuevas = acta.total_nuevas
+            total_faltantes = acta.total_faltantes
+            nota_historica = None
+
         ws["A5"] = "Fecha de devolución"
-        ws["B5"] = acta.created_at.strftime("%d/%m/%Y %H:%M") if acta.created_at else "—"
+        ws["B5"] = fecha_acta.strftime("%d/%m/%Y %H:%M") if fecha_acta else "—"
         ws["D5"] = "Recibió / registró"
-        ws["E5"] = acta.registrado_por or "—"
+        ws["E5"] = registrado_por
         ws["G5"] = "Docente que entrega"
-        ws["H5"] = acta.docente_nombre or "—"
+        ws["H5"] = docente_nombre
+        if nota_historica:
+            ws.merge_cells("A6:L6")
+            ws["A6"] = nota_historica
+            ws["A6"].font = Font(bold=True, color="9C6500")
+            ws["A6"].alignment = Alignment(wrap_text=True, vertical="center")
+            ws.row_dimensions[6].height = 42
         columnas = ["Elemento", "Categoría", "Referencia", "Marca", "Modelo", "Serial", "Entregadas", "Recibidas en esta acta", "Nuevas en esta acta", "Faltantes pendientes", "Estado físico", "Observación"]
         fila_header = 7
         _estilizar_encabezado(ws, fila_header, columnas)
         fila = fila_header + 1
-        for dato in (acta.detalles_resumen or []):
+        for dato in resumen_acta:
             valores = [
                 dato.get("nombre", ""), dato.get("categoria", ""), dato.get("referencia", ""),
                 dato.get("marca", ""), dato.get("modelo", ""), dato.get("serial", ""),
@@ -1507,10 +1605,10 @@ def descargar_excel_devolucion(
                 ws.cell(fila, col).alignment = Alignment(vertical="top", wrap_text=True)
             fila += 1
         ws.cell(fila, 1, "TOTALES DEL ACTA").font = Font(bold=True)
-        ws.cell(fila, 7, acta.total_entregadas).font = Font(bold=True)
-        ws.cell(fila, 8, acta.total_recibidas).font = Font(bold=True)
-        ws.cell(fila, 9, acta.total_nuevas).font = Font(bold=True)
-        ws.cell(fila, 10, acta.total_faltantes).font = Font(bold=True)
+        ws.cell(fila, 7, total_entregadas).font = Font(bold=True)
+        ws.cell(fila, 8, total_recibidas).font = Font(bold=True)
+        ws.cell(fila, 9, total_nuevas).font = Font(bold=True)
+        ws.cell(fila, 10, total_faltantes).font = Font(bold=True)
         ws.auto_filter.ref = f"A{fila_header}:L{max(fila - 1, fila_header)}"
         ws.freeze_panes = f"A{fila_header + 1}"
         widths = [28, 20, 25, 18, 18, 22, 13, 21, 18, 20, 17, 42]
@@ -1518,9 +1616,9 @@ def descargar_excel_devolucion(
             ws.column_dimensions[chr(64 + idx) if idx <= 26 else "A"].width = width
         firma_row = fila + 3
         _insertar_firma_excel(
-            ws, acta.firma_docente, firma_row,
+            ws, firma_docente, firma_row,
             "FIRMA DEL DOCENTE / RESPONSABLE — DEVOLUCIÓN",
-            acta.docente_nombre, acta.created_at,
+            docente_nombre, fecha_acta,
         )
         ws.sheet_properties.pageSetUpPr.fitToPage = True
         ws.page_setup.fitToWidth = 1
